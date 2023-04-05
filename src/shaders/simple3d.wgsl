@@ -92,8 +92,8 @@ fn fs_main(in: VertexOutput) -> GBuffer {
     //gbuffer.color = in.norm;
     //gbuffer.pos = in.position;
     let dim = vec2<f32>(textureDimensions(g_diffuse));
-    let f_uv = in.tex_coord;
-    let f_uv = floor(f_uv * dim) / dim;
+    var f_uv = in.tex_coord;
+    f_uv = floor(f_uv * dim) / dim;
     let bary_coord = bary(in.uv_a, in.uv_b, in.uv_c, f_uv);
     let f_pos = in.pos_a.xyz * bary_coord.x + in.pos_b.xyz * bary_coord.y + in.pos_c.xyz * bary_coord.z;
 

@@ -34,6 +34,7 @@ impl Format for GpuTexture {
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+            view_formats: Default::default(),
         });
 
         let desc = TextureViewDescriptor {

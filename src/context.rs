@@ -53,8 +53,8 @@ pub fn resize(width: u32, height: u32) {
 pub async fn init(window: &Window, gbuffer_size: (u32, u32)) -> Result<()> {
     // create stuff
     let size = window.inner_size();
-    let instance = wgpu::Instance::new(wgpu::Backends::all());
-    let surface = unsafe { instance.create_surface(&window) };
+    let instance = wgpu::Instance::default();
+    let surface = unsafe { instance.create_surface(&window) }.unwrap();
     let surface = WGPU_SURFACE
         .try_insert(surface)
         .map_err(|_| failed_precondition("WGPU already initialized"))?;
@@ -83,7 +83,7 @@ pub async fn init(window: &Window, gbuffer_size: (u32, u32)) -> Result<()> {
             None,
         )
         .await
-        .context("Failed to create device")?;
+        .unwrap();
 
     let _ = WGPU_QUEUE
         .try_insert(queue)
@@ -94,18 +94,10 @@ pub async fn init(window: &Window, gbuffer_size: (u32, u32)) -> Result<()> {
         .map_err(|_| failed_precondition("WGPU already initialized"))?;
 
     // configure surface
-    let swapchain_format = *surface
-        .get_supported_formats(&adapter)
-        .get(0)
-        .context("Failed to get surface format")?;
-
-    let config = SurfaceConfiguration {
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: swapchain_format,
-        width: size.width,
-        height: size.height,
-        present_mode: wgpu::PresentMode::Mailbox,
-    };
+    let config = surface
+        .get_default_config(&adapter, size.width, size.height)
+        .unwrap();
+    let swapchain_format = config.format;
 
     surface.configure(device, &config);
     let _ = WGPU_SURF_CONF

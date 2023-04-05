@@ -85,9 +85,7 @@ impl<'a> Frame<'a> {
     /// The frame will be renderered and presented when this object is dropped
     pub fn new() -> Result<Frame<'a>> {
         // get next frame
-        let frame = surface()
-            .get_current_texture()
-            .context("Failed to acquire next swap chain texture")?;
+        let frame = surface().get_current_texture().unwrap();
         let frame_view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());

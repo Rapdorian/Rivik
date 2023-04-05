@@ -51,17 +51,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let pos = textureSample(g_pos, samplr, in.uv).xyz;
 
     let light_dir = light_data.direction.xyz;
-    let power = max(dot(norm, normalize(light_dir)), 0.0);
+    var power = max(dot(norm, normalize(light_dir)), 0.0);
 
     // TODO: Specular strength/intensity should be in the gbuffer
     let spec_str = 0.5;
     let shininess = 16.0;
 
     let refl_dir = reflect(-light_dir, norm);
-    let spec = spec_str * pow(clamp(dot(normalize(-pos), refl_dir), 0.0, 1.0), shininess);
+    var spec = spec_str * pow(clamp(dot(normalize(-pos), refl_dir), 0.0, 1.0), shininess);
 
-    let power = round(power * 4.) / 4.;
-    let spec = round(spec* 4.) / 4.;
+    power = round(power * 4.) / 4.;
+    spec = round(spec* 4.) / 4.;
 
     // let towardsLight = dot(norm, normalize(light_dir));
     // let lightIntensity = step(0., towardsLight);

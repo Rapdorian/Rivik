@@ -39,6 +39,7 @@ impl GBuffer {
             dimension: TextureDimension::D2,
             format: TextureFormat::Rgba16Float,
             usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            view_formats: Default::default(),
         });
 
         let pos_tex = device.create_texture(&TextureDescriptor {
@@ -49,6 +50,7 @@ impl GBuffer {
             dimension: TextureDimension::D2,
             format: TextureFormat::Rgba16Float,
             usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            view_formats: Default::default(),
         });
 
         let norm_tex = device.create_texture(&TextureDescriptor {
@@ -59,6 +61,7 @@ impl GBuffer {
             dimension: TextureDimension::D2,
             format: TextureFormat::Rgba16Float,
             usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            view_formats: Default::default(),
         });
 
         let hdr_tex = device.create_texture(&TextureDescriptor {
@@ -69,6 +72,7 @@ impl GBuffer {
             dimension: TextureDimension::D2,
             format: TextureFormat::Rgba16Float,
             usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            view_formats: Default::default(),
         });
 
         let depth_tex = device.create_texture(&TextureDescriptor {
@@ -79,6 +83,7 @@ impl GBuffer {
             dimension: TextureDimension::D2,
             format: TextureFormat::Depth24Plus,
             usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            view_formats: Default::default(),
         });
 
         let layout = device.create_bind_group_layout(&Self::layout());
