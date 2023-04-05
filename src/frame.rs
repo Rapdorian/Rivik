@@ -1,10 +1,11 @@
 use std::borrow::Borrow;
 
+use egui::{ClippedPrimitive, TexturesDelta};
 use reerror::{throw, Context, Result};
 use wgpu::{Color, CommandEncoder, RenderBundle, SurfaceTexture, TextureView};
 
 use crate::{
-    context::{device, gbuffer, queue, surface},
+    context::{device, egui_render, gbuffer, queue, surface, surface_config},
     filters::display::DisplayFilter,
 };
 
@@ -16,6 +17,7 @@ pub struct Frame<'a> {
     geom: Vec<&'a RenderBundle>,
     lights: Vec<&'a RenderBundle>,
     filters: Vec<&'a RenderBundle>,
+    ui: Option<(&'a [ClippedPrimitive], TexturesDelta)>,
 }
 
 impl<'a> Frame<'a> {
@@ -77,6 +79,52 @@ impl<'a> Frame<'a> {
             rpass.execute_bundles(filters);
         }
 
+        // render UI pass
+        if let Some((clipped_primitives, textures_delta)) = self.ui {
+            let mut renderer = egui_render().write().unwrap();
+            // update textures
+            for (id, image) in textures_delta.set {
+                renderer.update_texture(device(), queue(), id, &image);
+            }
+
+            let screen_descriptor = {
+                let config = surface_config().read().unwrap();
+                egui_wgpu::renderer::ScreenDescriptor {
+                    size_in_pixels: [config.width, config.height],
+                    pixels_per_point: 1.0,
+                }
+            };
+
+            let cmd_buffer = renderer.update_buffers(
+                device(),
+                queue(),
+                &mut self.encoder,
+                &clipped_primitives,
+                &screen_descriptor,
+            );
+
+            {
+                let mut rpass = self.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &self.frame_view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: true,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    label: Some("egui_render"),
+                });
+
+                renderer.render(&mut rpass, &clipped_primitives, &screen_descriptor);
+            }
+
+            for id in textures_delta.free {
+                renderer.free_texture(&id);
+            }
+        }
+
         let _ = queue().submit(Some(self.encoder.finish()));
         self.frame.present();
     }
@@ -98,6 +146,7 @@ impl<'a> Frame<'a> {
             geom: vec![],
             lights: vec![],
             filters: vec![],
+            ui: None,
         })
     }
 
@@ -111,5 +160,10 @@ impl<'a> Frame<'a> {
 
     pub fn draw_filter(&mut self, filter: &'a dyn Borrow<RenderBundle>) {
         self.filters.push(filter.borrow());
+    }
+
+    pub fn ui(&mut self, clip_prim: &'a [ClippedPrimitive], textures: TexturesDelta) {
+        // store these values in self so we can render the UI later
+        self.ui = Some((clip_prim, textures));
     }
 }

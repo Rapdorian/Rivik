@@ -31,6 +31,9 @@ async fn run() -> Result<()> {
     let window = Window::new(&event_loop).map_err(internal)?;
     rivik_render::init(&window, (1920, 1080)).await;
 
+    let mut egui_winit = egui_winit::State::new(&event_loop);
+    let mut ctx = egui::Context::default();
+
     // load a mesh
     let mesh = throw!(load("file:assets/fighter_smooth.obj", GpuMesh(ObjMesh)));
     let tex = load(
@@ -64,19 +67,27 @@ async fn run() -> Result<()> {
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
         match event {
-            Event::WindowEvent {
-                event: WindowEvent::Resized(size),
-                ..
-            } => {
-                resize(size.width, size.height);
+            Event::WindowEvent { event, .. } => {
+                let resp = egui_winit.on_event(&ctx, &event);
 
-                // re-compute projection matrix
-                let aspect = {
-                    let config = surface_config().read().unwrap();
-                    config.width as f32 / config.height as f32
-                };
+                if !resp.consumed {
+                    match event {
+                        WindowEvent::Resized(size) => {
+                            resize(size.width, size.height);
 
-                proj = ultraviolet::projection::perspective_vk(80.0, aspect, 0.1, 100.0);
+                            // re-compute projection matrix
+                            let aspect = {
+                                let config = surface_config().read().unwrap();
+                                config.width as f32 / config.height as f32
+                            };
+
+                            proj =
+                                ultraviolet::projection::perspective_vk(80.0, aspect, 0.1, 100.0);
+                        }
+                        WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                        _ => {}
+                    }
+                }
             }
             Event::RedrawRequested(..) => {
                 i = (i + 1) % 4096;
@@ -92,14 +103,26 @@ async fn run() -> Result<()> {
                 frame.draw_light(&ambient);
                 frame.draw_filter(&display);
 
+                // run UI
+                let input = egui_winit.take_egui_input(&window);
+
+                let output = ctx.run(input, |ctx| {
+                    egui::Window::new("Egui Test").show(&ctx, |ui| {
+                        ui.label("Hello world!");
+                        if ui.button("Click me").clicked() {
+                            println!("Button pressed");
+                        }
+                    });
+                });
+
+                egui_winit.handle_platform_output(&window, &ctx, output.platform_output);
+                let clipped_primitives = ctx.tessellate(output.shapes);
+                frame.ui(&clipped_primitives, output.textures_delta);
+
                 frame.present();
                 window.request_redraw();
             }
 
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } => *control_flow = ControlFlow::Exit,
             _ => {}
         }
     })

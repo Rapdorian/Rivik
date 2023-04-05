@@ -2,6 +2,7 @@
 
 use std::sync::RwLock;
 
+use egui_wgpu::Renderer;
 use once_cell::sync::OnceCell;
 use reerror::{conversions::failed_precondition, Context, Result};
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration};
@@ -14,6 +15,7 @@ static WGPU_SURFACE: OnceCell<Surface> = OnceCell::new();
 static WGPU_QUEUE: OnceCell<Queue> = OnceCell::new();
 static G_BUFFER: OnceCell<GBuffer> = OnceCell::new();
 static WGPU_SURF_CONF: OnceCell<RwLock<SurfaceConfiguration>> = OnceCell::new();
+static EGUI_RENDER: OnceCell<RwLock<Renderer>> = OnceCell::new();
 
 /// Fetches the GBuffer being used by this renderer
 pub fn gbuffer() -> &'static GBuffer {
@@ -38,6 +40,10 @@ pub fn device() -> &'static Device {
 /// Fetches the config for the current WGPU surface
 pub fn surface_config() -> &'static RwLock<SurfaceConfiguration> {
     WGPU_SURF_CONF.get().expect("WGPU should be initialized")
+}
+
+pub fn egui_render() -> &'static RwLock<Renderer> {
+    EGUI_RENDER.get().expect("WGPU should be initialized")
 }
 
 /// Resize the WGPU surface
@@ -107,5 +113,14 @@ pub async fn init(window: &Window, gbuffer_size: (u32, u32)) -> Result<()> {
     let _ = G_BUFFER
         .try_insert(GBuffer::new(gbuffer_size.0, gbuffer_size.1))
         .map_err(|_| failed_precondition("WGPU already initialized"))?;
+
+    let Ok(_) = EGUI_RENDER.try_insert(RwLock::new(Renderer::new(
+        device,
+        swapchain_format,
+        None,
+        1,
+    ))) else {
+        unreachable!("This invariant has already been checked")
+    };
     Ok(())
 }
