@@ -1,14 +1,21 @@
 use std::borrow::Borrow;
 
 use egui::{ClippedPrimitive, TexturesDelta};
-use reerror::{throw, Context, Result};
+use snafu::{Backtrace, ResultExt, Snafu};
 use tracing::{debug_span, instrument};
-use wgpu::{Color, CommandEncoder, RenderBundle, SurfaceTexture, TextureView};
+use wgpu::{Color, CommandEncoder, RenderBundle, SurfaceError, SurfaceTexture, TextureView};
 
 use crate::{
     context::{device, egui_render, gbuffer, queue, surface, surface_config},
     filters::display::DisplayFilter,
 };
+
+#[derive(Debug, Snafu)]
+#[snafu(display("Failed to create the next frame"))]
+pub struct FrameError {
+    source: SurfaceError,
+    backtrace: Backtrace,
+}
 
 #[derive(Debug)]
 pub struct Frame<'a> {
@@ -146,9 +153,9 @@ impl<'a> Frame<'a> {
 
     /// Try to fetch a new frame
     /// The frame will be renderered and presented when this object is dropped
-    pub fn new() -> Result<Frame<'a>> {
+    pub fn new() -> Result<Frame<'a>, FrameError> {
         // get next frame
-        let frame = surface().get_current_texture().unwrap();
+        let frame = surface().get_current_texture().context(FrameSnafu)?;
         let frame_view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());

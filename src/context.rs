@@ -4,7 +4,7 @@ use std::sync::RwLock;
 
 use egui_wgpu::Renderer;
 use once_cell::sync::OnceCell;
-use reerror::{conversions::failed_precondition, Context, Result};
+use snafu::{Backtrace, OptionExt, ResultExt, Snafu};
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration};
 use winit::window::Window;
 
@@ -56,15 +56,22 @@ pub fn resize(width: u32, height: u32) {
     surface().configure(device(), &config);
 }
 
+#[derive(Snafu, Debug)]
+pub enum InitError {
+    #[snafu(display("An instance of the renderer has already been initialized"))]
+    AlreadyInitialized { backtrace: Backtrace },
+}
+
 /// Initialize the renderer
-pub async fn init(window: &Window, gbuffer_size: (u32, u32)) -> Result<()> {
+pub async fn init(window: &Window, gbuffer_size: (u32, u32)) -> Result<(), InitError> {
     // create stuff
     let size = window.inner_size();
     let instance = wgpu::Instance::default();
     let surface = unsafe { instance.create_surface(&window) }.unwrap();
     let surface = WGPU_SURFACE
         .try_insert(surface)
-        .map_err(|_| failed_precondition("WGPU already initialized"))?;
+        .ok()
+        .context(AlreadyInitializedSnafu)?;
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::default(),
@@ -73,7 +80,7 @@ pub async fn init(window: &Window, gbuffer_size: (u32, u32)) -> Result<()> {
             compatible_surface: Some(surface),
         })
         .await
-        .context("Failed to find an appropriate adapter")?;
+        .expect("Failed to find an appropriate adapter");
 
     // Create the logical device and command queue
     let (device, queue) = adapter
@@ -94,11 +101,13 @@ pub async fn init(window: &Window, gbuffer_size: (u32, u32)) -> Result<()> {
 
     let _ = WGPU_QUEUE
         .try_insert(queue)
-        .map_err(|_| failed_precondition("WGPU already intiialized"))?;
+        .ok()
+        .context(AlreadyInitializedSnafu)?;
 
     let device = WGPU_DEVICE
         .try_insert(device)
-        .map_err(|_| failed_precondition("WGPU already initialized"))?;
+        .ok()
+        .context(AlreadyInitializedSnafu)?;
 
     // configure surface
     let config = surface
@@ -109,19 +118,22 @@ pub async fn init(window: &Window, gbuffer_size: (u32, u32)) -> Result<()> {
     surface.configure(device, &config);
     let _ = WGPU_SURF_CONF
         .try_insert(RwLock::new(config))
-        .map_err(|_| failed_precondition("WGPU already initialized"))?;
+        .ok()
+        .context(AlreadyInitializedSnafu)?;
 
     let _ = G_BUFFER
         .try_insert(GBuffer::new(gbuffer_size.0, gbuffer_size.1))
-        .map_err(|_| failed_precondition("WGPU already initialized"))?;
+        .ok()
+        .context(AlreadyInitializedSnafu)?;
 
-    let Ok(_) = EGUI_RENDER.try_insert(RwLock::new(Renderer::new(
-        device,
-        swapchain_format,
-        None,
-        1,
-    ))) else {
-        unreachable!("This invariant has already been checked")
-    };
+    let _ = EGUI_RENDER
+        .try_insert(RwLock::new(Renderer::new(
+            device,
+            swapchain_format,
+            None,
+            1,
+        )))
+        .ok()
+        .context(AlreadyInitializedSnafu)?;
     Ok(())
 }

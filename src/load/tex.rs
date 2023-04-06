@@ -1,6 +1,9 @@
 use std::num::NonZeroU32;
 
-use assets::{formats::img::Img, Format};
+use assets::{
+    formats::img::{ImageParseError, Img},
+    AssetLoadError, Format,
+};
 use image::{GenericImageView, ImageFormat};
 use wgpu::{
     ImageCopyTexture, ImageDataLayout, Origin3d, Texture, TextureAspect, TextureDescriptor,
@@ -13,8 +16,9 @@ pub struct GpuTexture(pub ImageFormat);
 
 impl Format for GpuTexture {
     type Output = (Texture, TextureViewDescriptor<'static>);
+    type Error = ImageParseError;
 
-    fn parse(&self, r: &assets::Path) -> reerror::Result<Self::Output> {
+    fn parse(&self, r: &assets::Path) -> Result<Self::Output, Self::Error> {
         let device = device();
         let image = (Img(self.0)).parse(r)?;
 

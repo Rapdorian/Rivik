@@ -1,6 +1,5 @@
 use std::{borrow::Borrow, rc::Rc, sync::Arc};
 
-use reerror::Result;
 use wgpu::{
     AddressMode, BindingResource, Buffer, FilterMode, RenderBundle, RenderBundleDescriptor,
     RenderBundleEncoderDescriptor, Texture, TextureViewDescriptor,
@@ -29,7 +28,7 @@ impl MeshRenderable {
         mesh: Rc<Arc<CountedBuffer>>,
         uniform: &Transform,
         tex: Rc<Arc<(Texture, TextureViewDescriptor)>>,
-    ) -> Result<Self> {
+    ) -> Self {
         // create render bundle for this asset
         let device = device();
         let mut bundle = device.create_render_bundle_encoder(&RenderBundleEncoderDescriptor {
@@ -83,12 +82,12 @@ impl MeshRenderable {
         bundle.set_vertex_buffer(0, mesh.slice(..));
         bundle.draw(0..mesh.len(), 0..1);
         let bundle = bundle.finish(&RenderBundleDescriptor { label: None });
-        Ok(Self {
+        Self {
             bundle,
             mesh,
             uniform,
             tex: texture_group,
-        })
+        }
     }
 }
 

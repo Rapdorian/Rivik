@@ -14,7 +14,6 @@ use egui::{
 use image::ImageFormat;
 use log::{error, info};
 use pollster::block_on;
-use reerror::{conversions::internal, throw, Result};
 use rivik_render::{
     context::{device, resize, surface_config},
     draw::mesh::MeshRenderable,
@@ -24,6 +23,7 @@ use rivik_render::{
     tracing::UiSubscriber,
     Frame, Transform,
 };
+use snafu::{ResultExt, Whatever};
 use tracing::{debug_span, dispatcher::set_global_default, Dispatch};
 use ultraviolet::{Mat4, Vec3, Vec4};
 use wgpu::{
@@ -36,26 +36,28 @@ use winit::{
     window::Window,
 };
 
-async fn run() -> Result<()> {
+async fn run() -> Result<(), Whatever> {
     // init window
     let event_loop = EventLoop::new();
     let proxy = event_loop.create_proxy();
     env_logger::init();
-    let window = Arc::new(Window::new(&event_loop).map_err(internal)?);
+    let window = Arc::new(Window::new(&event_loop).whatever_context("Failed to build window")?);
     rivik_render::init(&window, (1920, 1080)).await;
 
     let mut egui_winit = egui_winit::State::new(&event_loop);
     let mut ctx = egui::Context::default();
 
     // load a mesh
-    let mesh = throw!(load("file:assets/fighter_smooth.obj", GpuMesh(ObjMesh)));
+    let mesh = load("file:assets/fighter_smooth.obj", GpuMesh(ObjMesh))
+        .whatever_context("Failed to fetch fighter ship")?;
     let tex = load(
         "file:assets/fighter.albedo.png",
         GpuTexture(ImageFormat::Png),
-    )?;
+    )
+    .whatever_context("Failed to fetch fighter ship texture")?;
 
     let aspect = {
-        let config = surface_config().read()?;
+        let config = surface_config().read().unwrap();
         config.width as f32 / config.height as f32
     };
 
@@ -68,7 +70,7 @@ async fn run() -> Result<()> {
     let mut model = ultraviolet::Mat4::identity();
 
     let transform = Transform::new(proj, view, model);
-    let mesh_bundle = MeshRenderable::new(mesh, &transform, tex)?;
+    let mesh_bundle = MeshRenderable::new(mesh, &transform, tex);
 
     let mut i = 0;
 

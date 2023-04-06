@@ -3,10 +3,12 @@
 use std::ops::Deref;
 
 use assets::{
-    formats::mesh::{Mesh, Vert},
-    load, Format, Path,
+    formats::{
+        mesh::{Mesh, Vert},
+        FormatError,
+    },
+    load, AssetLoadError, Format, Path,
 };
-use reerror::{throw, Result};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     Buffer, BufferUsages,
@@ -19,15 +21,18 @@ use crate::{context::device, pipeline::Vertex3D};
 /// will add any metadata needed for the renderer to operate
 pub struct GpuMesh<F>(pub F)
 where
-    F: Format<Output = Mesh<f32>>;
+    F: Format<Output = Mesh<f32>> + Send + Sync,
+    F::Error: FormatError + Send + Sync;
 
 impl<F> Format for GpuMesh<F>
 where
-    F: Format<Output = Mesh<f32>> + Clone + 'static,
+    F: Format<Output = Mesh<f32>> + Clone + 'static + Send + Sync,
+    F::Error: FormatError + Send + Sync,
 {
     type Output = CountedBuffer;
+    type Error = AssetLoadError;
 
-    fn parse(&self, path: &Path) -> Result<Self::Output> {
+    fn parse(&self, path: &Path) -> Result<Self::Output, Self::Error> {
         // fetch the asset
         let asset = load(path.to_string(), self.0.clone())?;
 
