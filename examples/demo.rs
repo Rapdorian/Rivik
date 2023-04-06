@@ -23,7 +23,7 @@ use rivik_render::{
     tracing::UiSubscriber,
     Frame, Transform,
 };
-use snafu::{ResultExt, Whatever};
+use snafu::{ErrorCompat, ResultExt, Whatever};
 use tracing::{debug_span, dispatcher::set_global_default, Dispatch};
 use ultraviolet::{Mat4, Vec3, Vec4};
 use wgpu::{
@@ -203,6 +203,20 @@ async fn run() -> Result<(), Whatever> {
 
 fn main() {
     if let Err(e) = block_on(run()) {
-        error!("{}", e);
+        eprintln!("Error: {}", e);
+
+        if e.iter_chain().skip(1).next().is_some() {
+            eprintln!("\nCaused by:");
+        }
+
+        for (n, err) in e.iter_chain().skip(1).enumerate() {
+            eprintln!("\t{n}: {err}");
+        }
+
+        if let Some(backtrace) = e.backtrace() {
+            color_backtrace::BacktracePrinter::new()
+                .print_trace(backtrace, &mut color_backtrace::default_output_stream())
+                .unwrap();
+        }
     }
 }
