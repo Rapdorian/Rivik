@@ -2,6 +2,7 @@ use std::borrow::Borrow;
 
 use egui::{ClippedPrimitive, TexturesDelta};
 use reerror::{throw, Context, Result};
+use tracing::{debug_span, instrument};
 use wgpu::{Color, CommandEncoder, RenderBundle, SurfaceTexture, TextureView};
 
 use crate::{
@@ -21,14 +22,19 @@ pub struct Frame<'a> {
 }
 
 impl<'a> Frame<'a> {
+    #[instrument(skip(self))]
     pub fn present(mut self) {
         // TODO: Handle camera transform setup
         {
+            let geom_span = debug_span!("Geometry render pass");
+            let _e = geom_span.enter();
             let mut rpass = gbuffer().rpass(&mut self.encoder, Some(Color::BLACK));
             rpass.execute_bundles(self.geom);
         }
 
         {
+            let span = debug_span!("Lighting render pass");
+            let _e = span.enter();
             let mut rpass = self.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Lighting"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -45,42 +51,48 @@ impl<'a> Frame<'a> {
             rpass.execute_bundles(self.lights);
         }
 
-        // really ugly way of generating a default list of filters but only creating them if there
-        // is an empty filter list.
-        //
-        // This is ugly because we are regenerating the list every frame.
-        // TODO: this should probably be recorded once and statically cached
-        let display = if self.filters.is_empty() {
-            Some(DisplayFilter::default())
-        } else {
-            None
-        };
-
-        let filters = if !self.filters.is_empty() {
-            self.filters
-        } else {
-            vec![display.as_ref().unwrap().bundle()]
-        };
-
         {
-            let mut rpass = self.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Filters"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.frame_view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: true,
-                    },
-                })],
-                depth_stencil_attachment: None,
-            });
+            let span = debug_span!("Filter render pass");
+            let _e = span.enter();
+            // really ugly way of generating a default list of filters but only creating them if there
+            // is an empty filter list.
+            //
+            // This is ugly because we are regenerating the list every frame.
+            // TODO: this should probably be recorded once and statically cached
+            let display = if self.filters.is_empty() {
+                Some(DisplayFilter::default())
+            } else {
+                None
+            };
 
-            rpass.execute_bundles(filters);
+            let filters = if !self.filters.is_empty() {
+                self.filters
+            } else {
+                vec![display.as_ref().unwrap().bundle()]
+            };
+
+            {
+                let mut rpass = self.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Filters"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &self.frame_view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: true,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                });
+
+                rpass.execute_bundles(filters);
+            }
         }
 
         // render UI pass
         if let Some((clipped_primitives, textures_delta)) = self.ui {
+            let span = debug_span!("Render UI");
+            let _e = span.enter();
             let mut renderer = egui_render().write().unwrap();
             // update textures
             for (id, image) in textures_delta.set {
@@ -124,6 +136,9 @@ impl<'a> Frame<'a> {
                 renderer.free_texture(&id);
             }
         }
+
+        let span = debug_span!("GPU time");
+        let _e = span.enter();
 
         let _ = queue().submit(Some(self.encoder.finish()));
         self.frame.present();

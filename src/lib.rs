@@ -9,6 +9,7 @@
 
 pub mod context;
 mod frame;
+pub mod tracing;
 pub mod transform;
 pub use transform::Transform;
 

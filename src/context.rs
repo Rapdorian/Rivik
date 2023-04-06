@@ -47,6 +47,7 @@ pub fn egui_render() -> &'static RwLock<Renderer> {
 }
 
 /// Resize the WGPU surface
+#[tracing::instrument]
 pub fn resize(width: u32, height: u32) {
     let config = surface_config();
     let mut config = config.write().unwrap();

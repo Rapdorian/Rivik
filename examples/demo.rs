@@ -1,6 +1,16 @@
-use std::f32::consts::PI;
+use std::{
+    f32::consts::PI,
+    mem,
+    sync::{Arc, RwLock},
+    thread,
+    time::Duration,
+};
 
 use assets::{formats::mesh::ObjMesh, load};
+use egui::{
+    plot::{Bar, BarChart, Plot},
+    Color32,
+};
 use image::ImageFormat;
 use log::{error, info};
 use pollster::block_on;
@@ -11,8 +21,10 @@ use rivik_render::{
     filters::display::DisplayFilter,
     lights::{ambient::AmbientLight, sun::SunLight},
     load::{GpuMesh, GpuTexture},
+    tracing::UiSubscriber,
     Frame, Transform,
 };
+use tracing::{debug_span, dispatcher::set_global_default, Dispatch};
 use ultraviolet::{Mat4, Vec3, Vec4};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
@@ -27,8 +39,9 @@ use winit::{
 async fn run() -> Result<()> {
     // init window
     let event_loop = EventLoop::new();
+    let proxy = event_loop.create_proxy();
     env_logger::init();
-    let window = Window::new(&event_loop).map_err(internal)?;
+    let window = Arc::new(Window::new(&event_loop).map_err(internal)?);
     rivik_render::init(&window, (1920, 1080)).await;
 
     let mut egui_winit = egui_winit::State::new(&event_loop);
@@ -64,7 +77,25 @@ async fn run() -> Result<()> {
 
     let display = DisplayFilter::default();
 
+    // setup performance tracing
+    let subscriber = UiSubscriber::new();
+    let spans = subscriber.data();
+    let dispatch = Dispatch::new(subscriber);
+    set_global_default(dispatch).unwrap();
+    let mut captured_trace = Arc::new(RwLock::new(None));
+
+    // issue frame requests from another thread
+    {
+        let window = window.clone();
+        thread::spawn(move || loop {
+            thread::sleep(Duration::from_millis(1000 / 60));
+            window.request_redraw();
+        });
+    }
+
     event_loop.run(move |event, _, control_flow| {
+        let span = debug_span!("Event Callback", ?event);
+        let _e = span.enter();
         *control_flow = ControlFlow::Wait;
         match event {
             Event::WindowEvent { event, .. } => {
@@ -90,37 +121,77 @@ async fn run() -> Result<()> {
                 }
             }
             Event::RedrawRequested(..) => {
+                let mut frame = Frame::new().unwrap();
+                // fetch span chart from last frame
+                let span_chart = spans.write().unwrap().generate_chart();
+
+                let span = debug_span!("Draw frame");
+                let _redraw = span.enter();
+
                 i = (i + 1) % 4096;
 
+                let span = debug_span!("Rotate Ship");
+                let span = span.enter();
                 model = Mat4::from_rotation_y(i as f32 / (4096.0 / (2. * PI)))
                     * Mat4::from_translation(Vec3::new(0.0, -0.7, 0.0));
                 transform.update(proj, view, model);
+                mem::drop(span);
 
-                let mut frame = Frame::new().unwrap();
+                {
+                    let span = debug_span!("Build frame");
+                    let _e = span.enter();
+                    frame.draw_geom(&mesh_bundle);
+                    frame.draw_light(&sun);
+                    frame.draw_light(&ambient);
+                    frame.draw_filter(&display);
+                }
 
-                frame.draw_geom(&mesh_bundle);
-                frame.draw_light(&sun);
-                frame.draw_light(&ambient);
-                frame.draw_filter(&display);
-
+                let span = debug_span!("Run UI");
+                let ui_span = span.enter();
                 // run UI
                 let input = egui_winit.take_egui_input(&window);
 
                 let output = ctx.run(input, |ctx| {
-                    egui::Window::new("Egui Test").show(&ctx, |ui| {
-                        ui.label("Hello world!");
-                        if ui.button("Click me").clicked() {
-                            println!("Button pressed");
+                    egui::Window::new("Frame timing").show(&ctx, |ui| {
+                        if captured_trace.read().unwrap().is_none() {
+                            if ui.button("Capture").clicked() {
+                                *captured_trace.write().unwrap() = Some(span_chart.clone());
+                            }
+                        } else {
+                            if ui.button("Resume").clicked() {
+                                *captured_trace.write().unwrap() = None;
+                            }
                         }
+
+                        let chart1 = BarChart::new(
+                            if let Some(ref chart) = *captured_trace.read().unwrap() {
+                                chart.clone()
+                            } else {
+                                span_chart
+                            },
+                        )
+                        .highlight(true)
+                        .horizontal()
+                        .width(1.0)
+                        .name("Set 1");
+
+                        Plot::new("Name of plot")
+                            .data_aspect(0.5)
+                            .allow_scroll(false)
+                            .show_axes([false, false])
+                            .show_background(false)
+                            .show(ui, |plot| {
+                                plot.bar_chart(chart1);
+                            });
                     });
                 });
 
                 egui_winit.handle_platform_output(&window, &ctx, output.platform_output);
                 let clipped_primitives = ctx.tessellate(output.shapes);
                 frame.ui(&clipped_primitives, output.textures_delta);
+                mem::drop(ui_span);
 
                 frame.present();
-                window.request_redraw();
             }
 
             _ => {}
