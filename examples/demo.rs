@@ -8,7 +8,7 @@ use std::{
 
 use assets::{formats::mesh::ObjMesh, load};
 use egui::{
-    plot::{Bar, BarChart, Plot},
+    plot::{Bar, BarChart, Legend, Plot},
     Color32,
 };
 use image::ImageFormat;
@@ -20,11 +20,12 @@ use rivik_render::{
     filters::display::DisplayFilter,
     lights::{ambient::AmbientLight, sun::SunLight},
     load::{GpuMesh, GpuTexture},
-    tracing::UiSubscriber,
+    tracing::{display_traces, generate_chart, UiSubscriber, UiSubscriberData},
     Frame, Transform,
 };
 use snafu::{ErrorCompat, ResultExt, Whatever};
-use tracing::{debug_span, dispatcher::set_global_default, Dispatch};
+use tracing::{debug, debug_span, dispatcher::set_global_default, Dispatch};
+use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, Registry};
 use ultraviolet::{Mat4, Vec3, Vec4};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
@@ -80,10 +81,11 @@ async fn run() -> Result<(), Whatever> {
     let display = DisplayFilter::default();
 
     // setup performance tracing
-    let subscriber = UiSubscriber::new();
-    let spans = subscriber.data();
-    let dispatch = Dispatch::new(subscriber);
-    set_global_default(dispatch).unwrap();
+
+    set_global_default(Dispatch::new(
+        Registry::default().with(UiSubscriber::default()),
+    ));
+
     let mut captured_trace = Arc::new(RwLock::new(None));
 
     // issue frame requests from another thread
@@ -125,7 +127,7 @@ async fn run() -> Result<(), Whatever> {
             Event::RedrawRequested(..) => {
                 let mut frame = Frame::new().unwrap();
                 // fetch span chart from last frame
-                let span_chart = spans.write().unwrap().generate_chart();
+                let span_chart = generate_chart();
 
                 let span = debug_span!("Draw frame");
                 let _redraw = span.enter();
@@ -148,13 +150,18 @@ async fn run() -> Result<(), Whatever> {
                     frame.draw_filter(&display);
                 }
 
-                let span = debug_span!("Run UI");
+                let span = debug_span!("Handle egui");
                 let ui_span = span.enter();
                 // run UI
+                let span = debug_span!("Fetching UI inputs");
+                let input_span = span.enter();
                 let input = egui_winit.take_egui_input(&window);
+                drop(input_span);
 
                 let output = ctx.run(input, |ctx| {
-                    egui::Window::new("Frame timing").show(&ctx, |ui| {
+                    let span = debug_span!("Running UI");
+                    let span = span.enter();
+                    egui::TopBottomPanel::bottom("Frame timing").show(&ctx, |ui| {
                         if captured_trace.read().unwrap().is_none() {
                             if ui.button("Capture").clicked() {
                                 *captured_trace.write().unwrap() = Some(span_chart.clone());
@@ -165,33 +172,31 @@ async fn run() -> Result<(), Whatever> {
                             }
                         }
 
-                        let chart1 = BarChart::new(
-                            if let Some(ref chart) = *captured_trace.read().unwrap() {
-                                chart.clone()
-                            } else {
-                                span_chart
-                            },
-                        )
-                        .highlight(true)
-                        .horizontal()
-                        .width(1.0)
-                        .name("Set 1");
+                        let spans = if let Some(ref chart) = *captured_trace.read().unwrap() {
+                            chart.clone()
+                        } else {
+                            span_chart
+                        };
 
                         Plot::new("Name of plot")
-                            .data_aspect(0.5)
+                            .data_aspect(0.1)
                             .allow_scroll(false)
+                            //.legend(Legend::default())
                             .show_axes([false, false])
                             .show_background(false)
                             .show(ui, |plot| {
-                                plot.bar_chart(chart1);
+                                display_traces(plot, spans.0, spans.1);
                             });
                     });
                 });
 
+                let span = debug_span!("Drawing UI");
+                let draw_span = span.enter();
                 egui_winit.handle_platform_output(&window, &ctx, output.platform_output);
                 let clipped_primitives = ctx.tessellate(output.shapes);
                 frame.ui(&clipped_primitives, output.textures_delta);
-                mem::drop(ui_span);
+                drop(draw_span);
+                drop(ui_span);
 
                 frame.present();
             }

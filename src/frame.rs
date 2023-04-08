@@ -2,7 +2,7 @@ use std::borrow::Borrow;
 
 use egui::{ClippedPrimitive, TexturesDelta};
 use snafu::{Backtrace, ResultExt, Snafu};
-use tracing::{debug_span, instrument};
+use tracing::{debug, debug_span, instrument};
 use wgpu::{Color, CommandEncoder, RenderBundle, SurfaceError, SurfaceTexture, TextureView};
 
 use crate::{
@@ -148,6 +148,7 @@ impl<'a> Frame<'a> {
         let _e = span.enter();
 
         let _ = queue().submit(Some(self.encoder.finish()));
+        debug!("Presenting Frame");
         self.frame.present();
     }
 
