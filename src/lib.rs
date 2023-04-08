@@ -25,6 +25,10 @@ pub mod load {
 /// Contains render bundle creation methods for drawing geometry
 pub mod draw {
     pub mod mesh;
+    pub mod pixel_mesh;
+
+    pub use mesh::Mesh;
+    pub use pixel_mesh::PixelMesh;
 }
 
 /// Containts render bundle creation methods for screen filters
@@ -43,6 +47,7 @@ pub mod pipeline {
     pub mod ambient;
     pub mod display;
     pub mod gbuffer;
+    pub mod mesh;
     pub mod simple;
     pub mod sun;
     pub mod vertex3d;

@@ -1,5 +1,5 @@
 use std::{
-    f32::consts::{FRAC_2_PI, PI},
+    f32::consts::FRAC_2_PI,
     mem,
     sync::{Arc, RwLock},
     thread,
@@ -7,31 +7,23 @@ use std::{
 };
 
 use assets::{formats::mesh::ObjMesh, load};
-use egui::{
-    plot::{Bar, BarChart, Legend, Plot},
-    Color32,
-};
+use egui::plot::Plot;
 use image::ImageFormat;
-use log::{error, info};
 use pollster::block_on;
 use rivik_render::{
-    context::{device, resize, surface_config},
-    draw::mesh::MeshRenderable,
+    context::{resize, surface_config},
+    draw::{self, pixel_mesh, Mesh, PixelMesh},
     filters::display::DisplayFilter,
     lights::{ambient::AmbientLight, sun::SunLight},
     load::{GpuMesh, GpuTexture},
-    tracing::{display_traces, generate_chart, UiSubscriber, UiSubscriberData},
+    tracing::{display_traces, generate_chart, UiSubscriber},
     transform::Spatial,
     Frame, Transform,
 };
 use snafu::{ErrorCompat, ResultExt, Whatever};
-use tracing::{debug, debug_span, dispatcher::set_global_default, Dispatch};
+use tracing::{debug_span, dispatcher::set_global_default, Dispatch};
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, Registry};
 use ultraviolet::{Mat4, Vec3, Vec4};
-use wgpu::{
-    util::{BufferInitDescriptor, DeviceExt},
-    BufferUsages,
-};
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -50,8 +42,11 @@ async fn run() -> Result<(), Whatever> {
     let mut ctx = egui::Context::default();
 
     // load a mesh
-    let mesh = load("file:assets/fighter_smooth.obj", GpuMesh(ObjMesh))
-        .whatever_context("Failed to fetch fighter ship")?;
+    let mesh = load(
+        "file:assets/fighter_smooth.obj",
+        GpuMesh(ObjMesh, draw::mesh::vertex_buffer),
+    )
+    .whatever_context("Failed to fetch fighter ship")?;
     let tex = load(
         "file:assets/fighter.albedo.png",
         GpuTexture(ImageFormat::Png),
@@ -72,7 +67,7 @@ async fn run() -> Result<(), Whatever> {
     let mut model = ultraviolet::Mat4::identity();
 
     let transform = Transform::new(proj, view, model);
-    let mesh_bundle = MeshRenderable::new(mesh, transform, tex);
+    let mesh_bundle = Mesh::new(mesh, tex);
 
     let mut i = 0;
 
