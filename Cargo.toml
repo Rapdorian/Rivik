@@ -16,6 +16,7 @@ assets = { package = "rivik_assets", git = "https://github.com/Rapdorian/rivik_a
 once_cell = "1.16.0"
 bytemuck = {version = "1", features = [ "derive" ]}
 wgpu_macros = "0.1.0"
+mint = "0.5.9"
 
 snafu = "0.7.4"
 

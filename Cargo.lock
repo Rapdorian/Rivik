@@ -1799,6 +1799,7 @@ dependencies = [
  "env_logger",
  "image",
  "log",
+ "mint",
  "once_cell",
  "palette",
  "pollster",

@@ -10,7 +10,7 @@ use wgpu::{
 
 use crate::{
     context::{device, gbuffer, surface_config},
-    shader,
+    shader, transform,
 };
 
 use super::{GBuffer, LIGHT_BLEND};
@@ -50,7 +50,7 @@ fn create_pipeline() -> RenderPipeline {
         label: None,
         entries: &[BindGroupLayoutEntry {
             binding: 0,
-            visibility: ShaderStages::FRAGMENT,
+            visibility: ShaderStages::VERTEX,
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Uniform,
                 has_dynamic_offset: false,
@@ -64,7 +64,7 @@ fn create_pipeline() -> RenderPipeline {
 
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: None,
-        bind_group_layouts: &[&gbuffer.layout, bind_group_layout],
+        bind_group_layouts: &[&gbuffer.layout, bind_group_layout, transform::layout()],
         push_constant_ranges: &[],
     });
 

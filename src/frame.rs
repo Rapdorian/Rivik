@@ -28,6 +28,19 @@ pub struct Frame<'a> {
     ui: Option<(&'a [ClippedPrimitive], TexturesDelta)>,
 }
 
+pub trait Drawable {
+    fn bundle(&self) -> &RenderBundle;
+}
+
+impl<T> Drawable for T
+where
+    T: Borrow<RenderBundle>,
+{
+    fn bundle(&self) -> &RenderBundle {
+        self.borrow()
+    }
+}
+
 impl<'a> Frame<'a> {
     #[instrument(skip(self))]
     pub fn present(mut self) {
@@ -173,16 +186,16 @@ impl<'a> Frame<'a> {
         })
     }
 
-    pub fn draw_geom(&mut self, geom: &'a dyn Borrow<RenderBundle>) {
-        self.geom.push(geom.borrow());
+    pub fn draw_geom(&mut self, geom: &'a dyn Drawable) {
+        self.geom.push(geom.bundle());
     }
 
-    pub fn draw_light(&mut self, light: &'a dyn Borrow<RenderBundle>) {
-        self.lights.push(light.borrow());
+    pub fn draw_light(&mut self, light: &'a dyn Drawable) {
+        self.lights.push(light.bundle());
     }
 
-    pub fn draw_filter(&mut self, filter: &'a dyn Borrow<RenderBundle>) {
-        self.filters.push(filter.borrow());
+    pub fn draw_filter(&mut self, filter: &'a dyn Drawable) {
+        self.filters.push(filter.bundle());
     }
 
     pub fn ui(&mut self, clip_prim: &'a [ClippedPrimitive], textures: TexturesDelta) {

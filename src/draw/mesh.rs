@@ -9,6 +9,7 @@ use crate::{
     context::device,
     load::CountedBuffer,
     pipeline::{simple, GBuffer},
+    transform::Spatial,
     Transform,
 };
 
@@ -17,16 +18,14 @@ use crate::{
 /// TODO: Deep dive on when things are freed and how to minimally ensure asset lifetimes
 pub struct MeshRenderable {
     bundle: RenderBundle,
-    mesh: Rc<Arc<CountedBuffer>>,
-    uniform: wgpu::BindGroup,
-    tex: wgpu::BindGroup,
+    transform: Transform,
 }
 
 impl MeshRenderable {
     /// Create a new renderable from a group of assets
     pub fn new(
         mesh: Rc<Arc<CountedBuffer>>,
-        uniform: &Transform,
+        transform: Transform,
         tex: Rc<Arc<(Texture, TextureViewDescriptor)>>,
     ) -> Self {
         // create render bundle for this asset
@@ -44,7 +43,7 @@ impl MeshRenderable {
             layout: simple::layout(),
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: uniform.buffer().as_entire_binding(),
+                resource: transform.buffer().as_entire_binding(),
             }],
             label: None,
         });
@@ -82,18 +81,19 @@ impl MeshRenderable {
         bundle.set_vertex_buffer(0, mesh.slice(..));
         bundle.draw(0..mesh.len(), 0..1);
         let bundle = bundle.finish(&RenderBundleDescriptor { label: None });
-        Self {
-            bundle,
-            mesh,
-            uniform,
-            tex: texture_group,
-        }
+        Self { bundle, transform }
     }
 }
 
 impl Borrow<RenderBundle> for MeshRenderable {
     fn borrow(&self) -> &RenderBundle {
         &self.bundle
+    }
+}
+
+impl Spatial for MeshRenderable {
+    fn transform(&self) -> &Transform {
+        &self.transform
     }
 }
 

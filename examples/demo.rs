@@ -1,5 +1,5 @@
 use std::{
-    f32::consts::PI,
+    f32::consts::{FRAC_2_PI, PI},
     mem,
     sync::{Arc, RwLock},
     thread,
@@ -21,6 +21,7 @@ use rivik_render::{
     lights::{ambient::AmbientLight, sun::SunLight},
     load::{GpuMesh, GpuTexture},
     tracing::{display_traces, generate_chart, UiSubscriber, UiSubscriberData},
+    transform::Spatial,
     Frame, Transform,
 };
 use snafu::{ErrorCompat, ResultExt, Whatever};
@@ -71,11 +72,12 @@ async fn run() -> Result<(), Whatever> {
     let mut model = ultraviolet::Mat4::identity();
 
     let transform = Transform::new(proj, view, model);
-    let mesh_bundle = MeshRenderable::new(mesh, &transform, tex);
+    let mesh_bundle = MeshRenderable::new(mesh, transform, tex);
 
     let mut i = 0;
 
     let ambient = AmbientLight::new(0.01, 0.01, 0.01);
+    let sun_dir = Vec3::new(1.0, 0.6, 1.0);
     let sun = SunLight::new(Vec3::new(1.0, 1.0, 1.0), Vec3::new(-1., 1., 0.));
 
     let display = DisplayFilter::default();
@@ -136,9 +138,19 @@ async fn run() -> Result<(), Whatever> {
 
                 let span = debug_span!("Rotate Ship");
                 let span = span.enter();
-                model = Mat4::from_rotation_y(i as f32 / (4096.0 / (2. * PI)))
-                    * Mat4::from_translation(Vec3::new(0.0, -0.7, 0.0));
-                transform.update(proj, view, model);
+                // model = Mat4::from_rotation_y(i as f32 / (4096.0 / (2. * PI)))
+                //     * Mat4::from_translation(Vec3::new(0.0, -0.7, 0.0));
+
+                view = Mat4::look_at(
+                    (Mat4::from_rotation_y(((i as f32) / 4096.0) * FRAC_2_PI * 10.0)
+                        * Vec4::new(3.0, 2.5, 0.0, 1.0))
+                    .xyz(),
+                    focus,
+                    Vec3::unit_y(),
+                );
+
+                mesh_bundle.transform().update(proj, view, model);
+                sun.transform().update(proj, view, model);
                 mem::drop(span);
 
                 {
