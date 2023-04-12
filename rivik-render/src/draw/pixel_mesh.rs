@@ -1,3 +1,4 @@
+//! Utilities for rendering a pixelated mesh
 use std::{borrow::Borrow, rc::Rc, sync::Arc};
 
 use assets::formats::mesh::{Mesh, Vert};
@@ -134,64 +135,3 @@ pub fn vertex_buffer(mesh: &Mesh<f32>) -> (Vec<u8>, usize) {
     }
     (buffer, verts.len())
 }
-
-// /// Contains references to a mesh that has been uploaded to the GPU
-// pub struct Mesh {
-//     pub(crate) vbuf: Buffer,
-//     pub(crate) ibuf: Buffer,
-//     pub(crate) icount: u32,
-//     pub(crate) tex: wgpu::BindGroup,
-// }
-
-// /// Contains a user configurable description of a mesh
-// pub struct MeshDescriptor {
-//     pub(crate) verts: Vec<Vertex3D>,
-//     pub(crate) tris: Vec<u16>,
-//     pub(crate) tex: Option<DynamicImage>,
-// }
-
-// impl MeshDescriptor {
-//     /// Creates an empty mesh
-//     pub fn new() -> Self {
-//         Self {
-//             verts: vec![],
-//             tris: vec![],
-//             tex: None,
-//         }
-//     }
-//
-//     /// Set the diffuse texture of this mesh
-//     pub fn set_diffuse(&mut self, diffuse: DynamicImage) {
-//         self.tex = Some(diffuse);
-//     }
-//
-//     /// Add a triangle to the mesh
-//     pub fn push(&mut self, a: Vertex3D, b: Vertex3D, c: Vertex3D) {
-//         let i = self.verts.len() as u16;
-//         self.verts.push(a);
-//         self.verts.push(b);
-//         self.verts.push(c);
-//
-//         self.tris.push(i);
-//         self.tris.push(i + 1);
-//         self.tris.push(i + 2);
-//     }
-//
-//     /// Get all vertices as a byte array
-//     pub fn vert_data(&self) -> Vec<u8> {
-//         let mut data = vec![];
-//         for v in &self.verts {
-//             data.extend_from_slice(&v.bytes());
-//         }
-//         data
-//     }
-//
-//     /// Get all triangle indices as a byte array
-//     pub fn index_data(&self) -> Vec<u8> {
-//         let mut data = vec![];
-//         for i in &self.tris {
-//             data.extend_from_slice(&i.to_ne_bytes());
-//         }
-//         data
-//     }
-// }

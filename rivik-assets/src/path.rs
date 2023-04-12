@@ -6,7 +6,7 @@ use std::{
     path::PathBuf,
 };
 
-use snafu::{Backtrace, GenerateImplicitData, IntoError, Snafu};
+use snafu::{Backtrace, IntoError, Snafu};
 use uriparse::{Scheme, URIReference};
 
 use crate::bin::BinRead;

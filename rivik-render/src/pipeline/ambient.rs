@@ -1,14 +1,15 @@
+//! Ambient lighting pipeline
+
 use std::{borrow::Cow, num::NonZeroU64};
 
 use once_cell::sync::OnceCell;
 use wgpu::{
     BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType::Buffer,
-    BlendComponent, BlendFactor, BlendOperation, BlendState, ColorTargetState, ColorWrites, Device,
-    PushConstantRange, RenderPipeline, ShaderStages, TextureFormat,
+    ColorTargetState, ColorWrites, Device, RenderPipeline, ShaderStages, TextureFormat,
 };
 
 use crate::{
-    context::{device, gbuffer, surface_config},
+    context::{device, gbuffer},
     shader,
 };
 
@@ -17,6 +18,7 @@ use super::{GBuffer, LIGHT_BLEND};
 static AMBIENT_PIPE: OnceCell<RenderPipeline> = OnceCell::new();
 static AMBIENT_LAYOUT: OnceCell<BindGroupLayout> = OnceCell::new();
 
+/// input layout for ambient lighting
 pub fn layout() -> &'static BindGroupLayout {
     if let Some(layout) = AMBIENT_LAYOUT.get() {
         &layout

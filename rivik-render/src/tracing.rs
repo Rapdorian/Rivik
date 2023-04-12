@@ -7,22 +7,16 @@ use std::{
         atomic::{AtomicUsize, Ordering},
         Arc, RwLock,
     },
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use egui::{
-    plot::{Bar, BarChart, PlotBounds, PlotUi},
-    Color32, Stroke,
+    plot::{Bar, BarChart, PlotUi},
+    Color32,
 };
 use once_cell::sync::Lazy;
 use palette::{FromColor, Srgb};
-use tracing::{
-    debug, event,
-    field::Visit,
-    info,
-    span::{Attributes, Record},
-    Id, Level, Subscriber,
-};
+use tracing::{event, field::Visit, span::Attributes, Id, Level, Subscriber};
 use tracing_core::Field;
 use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 
@@ -30,7 +24,6 @@ use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 struct SpanBar {
     name: String,
     fields: Vec<String>,
-    color: Color32,
     depth: usize,
     start: Instant,
     end: Option<Instant>,
@@ -58,14 +51,7 @@ static SPAN_DEPTH: AtomicUsize = AtomicUsize::new(0);
 static FRAME_START: Lazy<Arc<RwLock<Instant>>> =
     Lazy::new(|| Arc::new(RwLock::new(Instant::now())));
 
-pub struct UiSubscriberData {
-    spans: BTreeMap<u64, SpanBar>,
-    events: Vec<Event>,
-    depth: usize,
-    frame_start: Instant,
-    stack: Vec<Id>,
-}
-
+/// Display a record of a frame's span trace to an EGUI plot
 #[tracing::instrument(skip(plot, spans, events))]
 pub fn display_traces(plot: &mut PlotUi, spans: Vec<Bar>, events: Vec<Bar>) {
     plot.bar_chart(
@@ -129,6 +115,7 @@ fn generate_events() -> Vec<Bar> {
     chart
 }
 
+/// Record a frame's span trace
 pub fn generate_chart() -> (Vec<Bar>, Vec<Bar>) {
     let mut chart = Vec::new();
 
@@ -177,109 +164,9 @@ pub fn generate_chart() -> (Vec<Bar>, Vec<Bar>) {
 }
 //}
 
+/// A tracing subscriber that prepares traces for drawing to an EGUI plot
 #[derive(Default)]
 pub struct UiSubscriber {}
-
-// impl Subscriber for UiSubscriber {
-//     fn enabled(&self, metadata: &tracing::Metadata<'_>) -> bool {
-//         true
-//     }
-//
-//     fn new_span(&self, span: &span::Attributes<'_>) -> span::Id {
-//         let mut data = self.data.write().unwrap();
-//
-//         let mut hasher = DefaultHasher::new();
-//         hasher.write(span.metadata().name().as_bytes());
-//         let color = hasher.finish();
-//
-//         let hue = (color & 0xFFFF) as f32 / (0xFFFF as f32);
-//         let sat = (color >> 8 & 0xFFFF) as f32 / (0xFFFF as f32);
-//         let light = (color >> 16 & 0xFFFF) as f32 / (0xFFFF as f32);
-//         let light = light.max(0.4);
-//         let sat = sat.max(0.7);
-//
-//         let color = palette::Hsl::new(hue * 360.0, sat, light);
-//         let color = Srgb::from_color(color);
-//         let r = (color.red * 256.0) as u8;
-//         let g = (color.green * 256.0) as u8;
-//         let b = (color.blue * 256.0) as u8;
-//
-//         let mut name = String::with_capacity(span.metadata().name().len() + 100);
-//         name.push_str(span.metadata().name());
-//         if span.values().len() > 0 {
-//             name.push_str(&span.values().to_string());
-//         }
-//
-//         let bar = SpanBar {
-//             name,
-//             color: Color32::from_rgb(r, g, b),
-//             depth: 0,
-//             start: Instant::now(),
-//             end: None,
-//         };
-//         let id = (data.spans.last_key_value().map(|(k, _)| *k).unwrap_or(0) + 1) as u64;
-//         let None = data.spans.insert(id, bar) else { panic!("IDK what happened but its not good") };
-//         span::Id::from_u64(id)
-//     }
-//
-//     fn record(&self, span: &span::Id, values: &span::Record<'_>) {}
-//
-//     fn record_follows_from(&self, span: &span::Id, follows: &span::Id) {}
-//
-//     fn event(&self, event: &tracing::Event<'_>) {
-//         let mut data = self.data.write().unwrap();
-//
-//         let parent = event.parent().map(|e| e.into_u64());
-//
-//         let depth = parent
-//             .map(|id| data.spans.get(&id).unwrap().depth)
-//             .unwrap_or(1);
-//
-//         let name = parent
-//             .map(|id| data.spans.get(&id).unwrap().name.clone())
-//             .unwrap_or_else(|| event.metadata().name().to_owned());
-//
-//         data.events.push(Event {
-//             level: event.metadata().level().clone(),
-//             time: Instant::now(),
-//             name,
-//             depth,
-//         });
-//     }
-//
-//     fn enter(&self, span: &span::Id) {
-//         let mut data = self.data.write().unwrap();
-//
-//         data.stack.push(span.clone());
-//
-//         let depth = data.depth;
-//         let start = data.frame_start.elapsed();
-//         // update this span now
-//         {
-//             let span = &mut data.spans.entry(span.into_u64()).and_modify(|span| {
-//                 span.depth = depth;
-//                 span.start = Instant::now();
-//             });
-//         }
-//         data.depth += 1;
-//     }
-//
-//     fn exit(&self, span: &span::Id) {
-//         let mut data = self.data.write().unwrap();
-//
-//         // check that the currently exiting span is sane
-//         assert_eq!(data.stack.pop().unwrap(), *span);
-//
-//         let end = data.frame_start.elapsed();
-//         // update this span
-//         {
-//             let span = &mut data.spans.entry(span.into_u64()).and_modify(|span| {
-//                 span.end = Some(Instant::now());
-//             });
-//         }
-//         data.depth -= 1;
-//     }
-// }
 
 impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for UiSubscriber {
     fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
@@ -289,7 +176,6 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for UiSubscriber {
         let mut bar = SpanBar {
             name: name.to_owned(),
             fields: Vec::new(),
-            color: Color32::DARK_RED,
             depth: 0,
             start: time,
             end: None,
@@ -298,7 +184,7 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for UiSubscriber {
         let _ = SPAN_TREE.write().unwrap().insert(id.into_u64(), bar);
     }
 
-    fn on_enter(&self, id: &Id, ctx: Context<'_, S>) {
+    fn on_enter(&self, id: &Id, _ctx: Context<'_, S>) {
         let depth = SPAN_DEPTH.fetch_add(1, Ordering::Relaxed);
         let mut tree = SPAN_TREE.write().unwrap();
         let span = tree.get_mut(&id.into_u64()).unwrap();
@@ -326,11 +212,8 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for UiSubscriber {
         let _ = SPAN_TREE.write().unwrap().remove(&id.into_u64()).unwrap();
     }
 
-    fn on_event(&self, event: &event::Event<'_>, ctx: Context<'_, S>) {
+    fn on_event(&self, event: &event::Event<'_>, _ctx: Context<'_, S>) {
         let time = Instant::now();
-        let name = event.metadata().name();
-
-        let mut name = String::new();
 
         #[derive(Default)]
         struct EventRecorder {

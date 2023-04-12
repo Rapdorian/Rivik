@@ -1,15 +1,17 @@
+//! Utilities for working with the G-buffer
 use std::borrow::Cow;
 
-use crate::{context::device, frame::Frame};
+use crate::context::device;
 use wgpu::{
-    BindGroupLayout, BindGroupLayoutDescriptor, BindingType, BlendState, ColorTargetState,
-    ColorWrites, CommandEncoder, DepthBiasState, DepthStencilState, Extent3d, LoadOp,
+    BindGroup, BindGroupLayout, BindGroupLayoutDescriptor, BindingType, BlendState,
+    ColorTargetState, ColorWrites, CommandEncoder, DepthStencilState, Extent3d, LoadOp,
     RenderBundleDepthStencil, RenderPass, RenderPassColorAttachment,
     RenderPassDepthStencilAttachment, RenderPipeline, SamplerBindingType, SamplerDescriptor,
     TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView,
     TextureViewDescriptor, VertexBufferLayout,
 };
 
+/// The G-buffer
 pub struct GBuffer {
     pub(crate) color_view: TextureView,
     pub(crate) pos_view: TextureView,
@@ -17,8 +19,8 @@ pub struct GBuffer {
     pub(crate) lum_view: TextureView,
     pub(crate) depth_view: TextureView,
     pub(crate) hdr_view: TextureView,
-    pub(crate) bind_group: wgpu::BindGroup,
-    pub(crate) layout: wgpu::BindGroupLayout,
+    pub(crate) bind_group: BindGroup,
+    pub(crate) layout: BindGroupLayout,
 }
 
 impl GBuffer {
@@ -150,6 +152,7 @@ impl GBuffer {
         }
     }
 
+    /// Formats of the g-buffer's input buffers
     pub fn color_formats() -> &'static [Option<TextureFormat>] {
         &[
             Some(TextureFormat::Rgba16Float),
@@ -159,10 +162,12 @@ impl GBuffer {
         ]
     }
 
+    /// The format of the HDR buffer
     pub fn hdr_format() -> TextureFormat {
         TextureFormat::Rgba16Float
     }
 
+    /// The depth format used by the g-buffer
     pub fn depth_format() -> Option<RenderBundleDepthStencil> {
         Some(RenderBundleDepthStencil {
             format: TextureFormat::Depth24Plus,
@@ -171,6 +176,7 @@ impl GBuffer {
         })
     }
 
+    /// The g-buffer's render target
     pub const TARGETS: &[Option<ColorTargetState>] = &[
         Some(ColorTargetState {
             format: TextureFormat::Rgba16Float,
@@ -194,6 +200,9 @@ impl GBuffer {
         }),
     ];
 
+    /// Create a pipeline for rendering to the g-buffer without setting the depth buffer
+    ///
+    /// useful for rendering skyboxes and other objects that are infinitely far from the camera
     pub fn geom_no_depth_pipeline(
         shader: &str,
         bind_groups: &[&BindGroupLayout],
@@ -236,6 +245,7 @@ impl GBuffer {
         })
     }
 
+    /// Create a pipeline for rendering geometry to the g-buffer
     pub fn geom_pipeline(
         shader: &str,
         bind_groups: &[&BindGroupLayout],

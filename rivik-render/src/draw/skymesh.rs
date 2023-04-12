@@ -13,6 +13,7 @@ use crate::{
     Transform,
 };
 
+/// A Unlit mesh with no depth intended to be used for drawing skyboxes
 pub struct SkyMesh {
     bundle: RenderBundle,
     transform: Transform,
@@ -31,6 +32,7 @@ impl Spatial for SkyMesh {
 }
 
 impl SkyMesh {
+    /// Create a new skymesh
     pub fn new(
         mesh: Rc<Arc<CountedBuffer>>,
         tex: Rc<Arc<(Texture, TextureViewDescriptor)>>,

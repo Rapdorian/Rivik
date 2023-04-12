@@ -8,7 +8,6 @@
 
 use std::{
     any::Any,
-    borrow::Borrow,
     f32::consts::FRAC_PI_2,
     marker::PhantomData,
     sync::{Arc, RwLock},
@@ -24,7 +23,7 @@ use render::{
     context::{resize, surface_config},
     tracing::{display_traces, generate_chart},
     transform::Spatial,
-    Drawable, Frame, Transform,
+    Drawable, Frame,
 };
 pub use rivik_assets as assets;
 pub use rivik_render as render;
@@ -32,8 +31,8 @@ pub use rivik_scene as scene;
 pub use winit;
 
 use scene::Node;
-use tracing::{debug, debug_span};
-use wgpu::RenderBundle;
+use tracing::debug_span;
+
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -60,6 +59,7 @@ where
 enum RenderPassType {
     Geom,
     Light,
+    #[allow(dead_code)]
     Filter,
 }
 
@@ -197,7 +197,7 @@ pub fn run<A: App + 'static>() -> ! {
     block_on(render::init(&window, (1920, 1080))).expect("Failed to init Rivik");
 
     let mut egui_state = egui_winit::State::new(&event_loop);
-    let mut egui_ctx = egui::Context::default();
+    let egui_ctx = egui::Context::default();
 
     let mut scene = Context::default();
 

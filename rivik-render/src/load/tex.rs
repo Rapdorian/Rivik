@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 
 use assets::{
     formats::img::{ImageParseError, Img},
-    AssetLoadError, Format,
+    Format,
 };
 use image::{GenericImageView, ImageFormat};
 use wgpu::{
@@ -12,6 +12,7 @@ use wgpu::{
 
 use crate::context::{device, queue};
 
+/// Load a texture and upload it to the GPU
 pub struct GpuTexture(pub ImageFormat);
 
 impl Format for GpuTexture {

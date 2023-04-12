@@ -1,3 +1,7 @@
+//! Utilities for working with a transform buffer
+//!
+//! See the [Transform] type
+
 use std::{borrow::Borrow, num::NonZeroU64};
 
 use mint::ColumnMatrix4;
@@ -5,7 +9,7 @@ use once_cell::sync::OnceCell;
 use ultraviolet::Mat4;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    BindGroupLayout, BindGroupLayoutDescriptor, BindingType, Buffer, BufferUsages,
+    BindGroupLayout, BindGroupLayoutDescriptor, Buffer, BufferUsages,
 };
 
 use crate::context::{device, queue};
@@ -23,12 +27,15 @@ impl Default for Transform {
     }
 }
 
+/// An object that has a transform buffer
 pub trait Spatial {
+    /// Fetch this object's transform buffer
     fn transform(&self) -> &Transform;
 }
 
 static TRANFORM_LAYOUT: OnceCell<BindGroupLayout> = OnceCell::new();
 
+/// Layout of a transform buffer
 pub fn layout() -> &'static BindGroupLayout {
     if let Some(layout) = TRANFORM_LAYOUT.get() {
         layout

@@ -9,12 +9,13 @@ use wgpu::{
 };
 
 use crate::{
-    context::{device, gbuffer, queue, surface_config},
+    context::{device, gbuffer, queue},
     pipeline::{sun, GBuffer},
     transform::{self, Spatial},
     Transform,
 };
 
+/// A Directional light that can be rendered to a frame
 pub struct SunLight {
     bundle: RenderBundle,
     buffer: Buffer,

@@ -22,7 +22,6 @@ pub mod bin;
 //pub mod handle;
 mod mgr;
 mod path;
-use std::{backtrace::Backtrace, error::Error as StdError, fmt};
 
 pub use formats::Format;
 pub use mgr::*;

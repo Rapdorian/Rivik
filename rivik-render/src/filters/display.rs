@@ -16,6 +16,9 @@ use crate::{
 ///     TODO: Research into how this should be handled
 pub struct DisplayFilter {
     bundle: RenderBundle,
+
+    /// This buffer is not really used yet but will be
+    #[allow(dead_code)]
     hdr: wgpu::BindGroup,
 }
 

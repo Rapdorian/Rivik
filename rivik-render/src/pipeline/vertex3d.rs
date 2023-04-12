@@ -1,12 +1,9 @@
-use std::mem;
+#![allow(missing_docs)]
 
+///! A simple 3d vertex
 use bytemuck::{Pod, Zeroable};
 use ultraviolet::{Vec2, Vec3};
-use wgpu::BufferAddress;
 use wgpu_macros::VertexLayout;
-
-const VEC3_SIZE: BufferAddress = mem::size_of::<Vec3>() as BufferAddress;
-const VEC2_SIZE: BufferAddress = mem::size_of::<Vec2>() as BufferAddress;
 
 /// 3d Vertex
 ///
@@ -29,6 +26,7 @@ pub struct Vertex3D {
 }
 
 impl Vertex3D {
+    /// Create a new 3d pixel vertex
     pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self {
             pos: [x, y, z],
@@ -37,6 +35,7 @@ impl Vertex3D {
         }
     }
 
+    /// Add neighboring uvs to this vertex
     pub fn tri_uv(self, uv_a: Vec2, uv_b: Vec2, uv_c: Vec2) -> Self {
         Self {
             uv_a: *uv_a.as_array(),
@@ -46,6 +45,7 @@ impl Vertex3D {
         }
     }
 
+    /// Add neighboring normals to this vertex
     pub fn tri_norm(self, norm_a: Vec3, norm_b: Vec3, norm_c: Vec3) -> Self {
         Self {
             norm_a: *norm_a.as_array(),
@@ -55,6 +55,7 @@ impl Vertex3D {
         }
     }
 
+    /// Add neighboring positions this vertex
     pub fn local_space(self, pos_a: Vec3, pos_b: Vec3, pos_c: Vec3) -> Self {
         Self {
             pos_a: *pos_a.as_array(),
@@ -64,10 +65,12 @@ impl Vertex3D {
         }
     }
 
+    /// Add uv coordinates to this vertex
     pub fn uv(self, u: f32, v: f32) -> Self {
         Self { uv: [u, v], ..self }
     }
 
+    /// Add a normal to this vertex
     pub fn normal(self, x: f32, y: f32, z: f32) -> Self {
         Self {
             norm: [x, y, z],

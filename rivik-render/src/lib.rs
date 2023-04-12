@@ -1,10 +1,11 @@
 //! WGPU backed renderer structure
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 #![deny(macro_use_extern_crate)]
 #![warn(unused_crate_dependencies)]
 #![deny(unused_import_braces)]
-#![warn(unused_qualifications)]
+#![deny(unused_qualifications)]
 #![deny(unused_results)]
+#![deny(unused_imports)]
 #![warn(variant_size_differences)]
 
 pub mod context;
@@ -26,7 +27,7 @@ pub mod load {
 pub mod draw {
     pub mod mesh;
     pub mod pixel_mesh;
-    pub mod skymesh;
+    mod skymesh;
 
     pub use mesh::Mesh;
     pub use pixel_mesh::PixelMesh;
@@ -35,13 +36,18 @@ pub mod draw {
 
 /// Containts render bundle creation methods for screen filters
 pub mod filters {
-    pub mod display;
+    mod display;
+
+    pub use display::DisplayFilter;
 }
 
 /// Contains render bundle creation methods for lights
 pub mod lights {
-    pub mod ambient;
-    pub mod sun;
+    mod ambient;
+    mod sun;
+
+    pub use ambient::AmbientLight;
+    pub use sun::SunLight;
 }
 
 /// Types related to the render pipeline
@@ -58,7 +64,7 @@ pub mod pipeline {
     pub use gbuffer::GBuffer;
     pub use vertex3d::Vertex3D;
 
-    pub const LIGHT_BLEND: wgpu::BlendState = wgpu::BlendState {
+    pub(crate) const LIGHT_BLEND: wgpu::BlendState = wgpu::BlendState {
         color: wgpu::BlendComponent {
             src_factor: wgpu::BlendFactor::One,
             dst_factor: wgpu::BlendFactor::One,

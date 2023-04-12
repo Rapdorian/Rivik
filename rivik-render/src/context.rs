@@ -4,7 +4,7 @@ use std::sync::RwLock;
 
 use egui_wgpu::Renderer;
 use once_cell::sync::OnceCell;
-use snafu::{Backtrace, OptionExt, ResultExt, Snafu};
+use snafu::{Backtrace, OptionExt, Snafu};
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration};
 use winit::window::Window;
 
@@ -42,7 +42,7 @@ pub fn surface_config() -> &'static RwLock<SurfaceConfiguration> {
     WGPU_SURF_CONF.get().expect("WGPU should be initialized")
 }
 
-pub fn egui_render() -> &'static RwLock<Renderer> {
+pub(crate) fn egui_render() -> &'static RwLock<Renderer> {
     EGUI_RENDER.get().expect("WGPU should be initialized")
 }
 
@@ -56,6 +56,8 @@ pub fn resize(width: u32, height: u32) {
     surface().configure(device(), &config);
 }
 
+/// The renderer has already been initialized
+#[allow(missing_docs)]
 #[derive(Snafu, Debug)]
 pub enum InitError {
     #[snafu(display("An instance of the renderer has already been initialized"))]

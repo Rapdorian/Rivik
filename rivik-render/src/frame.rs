@@ -7,9 +7,10 @@ use wgpu::{Color, CommandEncoder, RenderBundle, SurfaceError, SurfaceTexture, Te
 
 use crate::{
     context::{device, egui_render, gbuffer, queue, surface, surface_config},
-    filters::display::DisplayFilter,
+    filters::DisplayFilter,
 };
 
+/// An error constructing a frame
 #[derive(Debug, Snafu)]
 #[snafu(display("Failed to create the next frame"))]
 pub struct FrameError {
@@ -17,6 +18,7 @@ pub struct FrameError {
     backtrace: Backtrace,
 }
 
+/// Handle's requesting and drawing to a frame
 #[derive(Debug)]
 pub struct Frame<'a> {
     pub(crate) frame: SurfaceTexture,
@@ -28,7 +30,9 @@ pub struct Frame<'a> {
     ui: Option<(&'a [ClippedPrimitive], TexturesDelta)>,
 }
 
+/// An object that can be drawn to a frame
 pub trait Drawable {
+    /// Fetch a render bundle that draws this object
     fn bundle(&self) -> &RenderBundle;
 }
 
@@ -42,6 +46,7 @@ where
 }
 
 impl<'a> Frame<'a> {
+    /// Finalize this frame and draw it to screen
     #[instrument(skip(self))]
     pub fn present(mut self) {
         // TODO: Handle camera transform setup
@@ -127,7 +132,7 @@ impl<'a> Frame<'a> {
                 }
             };
 
-            let cmd_buffer = renderer.update_buffers(
+            let _ = renderer.update_buffers(
                 device(),
                 queue(),
                 &mut self.encoder,
@@ -186,18 +191,22 @@ impl<'a> Frame<'a> {
         })
     }
 
+    /// Draw a geometry object to the internal g-buffer
     pub fn draw_geom(&mut self, geom: &'a dyn Drawable) {
         self.geom.push(geom.bundle());
     }
 
+    /// Add a light to this frame
     pub fn draw_light(&mut self, light: &'a dyn Drawable) {
         self.lights.push(light.bundle());
     }
 
+    /// Add a post-processing filter to this frame
     pub fn draw_filter(&mut self, filter: &'a dyn Drawable) {
         self.filters.push(filter.bundle());
     }
 
+    /// Draw an EGUI ui to this frame
     pub fn ui(&mut self, clip_prim: &'a [ClippedPrimitive], textures: TexturesDelta) {
         // store these values in self so we can render the UI later
         self.ui = Some((clip_prim, textures));

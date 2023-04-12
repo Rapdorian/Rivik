@@ -1,12 +1,11 @@
-use std::{borrow::Cow, num::NonZeroU64};
+//! Hdr Display pipeline
+use std::borrow::Cow;
 
 use once_cell::sync::OnceCell;
 use wgpu::{
-    BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
-    BindingType::{self, Buffer},
-    BlendComponent, BlendFactor, BlendOperation, BlendState, ColorTargetState, ColorWrites, Device,
-    PushConstantRange, RenderPipeline, SamplerBindingType, ShaderStages, TextureFormat,
-    TextureSampleType, TextureViewDimension,
+    BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
+    ColorTargetState, ColorWrites, Device, RenderPipeline, SamplerBindingType, ShaderStages,
+    TextureFormat, TextureSampleType, TextureViewDimension,
 };
 
 use crate::{
@@ -19,6 +18,7 @@ use super::{GBuffer, LIGHT_BLEND};
 static DISPLAY_PIPE: OnceCell<RenderPipeline> = OnceCell::new();
 static DISPLAY_LAYOUT: OnceCell<BindGroupLayout> = OnceCell::new();
 
+/// Fetch the hdr display input layout
 pub fn layout() -> &'static BindGroupLayout {
     if let Some(layout) = DISPLAY_LAYOUT.get() {
         &layout
@@ -28,7 +28,7 @@ pub fn layout() -> &'static BindGroupLayout {
     }
 }
 
-/// Fetch the ambient light pipeline
+/// Fetch the hdr display pipeline
 pub fn pipeline() -> &'static RenderPipeline {
     let device = device();
     let gbuffer = gbuffer();
@@ -42,7 +42,7 @@ pub fn pipeline() -> &'static RenderPipeline {
     }
 }
 
-fn output_pipeline(device: &Device, fmt: TextureFormat, gbuffer: &GBuffer) -> RenderPipeline {
+fn output_pipeline(device: &Device, fmt: TextureFormat, _gbuffer: &GBuffer) -> RenderPipeline {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(

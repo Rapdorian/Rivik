@@ -1,3 +1,4 @@
+//! Utilities for rendering a static mesh
 use std::{borrow::Borrow, rc::Rc, sync::Arc};
 
 use assets::formats::{self, mesh::Vert};
@@ -17,6 +18,7 @@ use crate::{
     Transform,
 };
 
+/// Basic mesh renderable
 pub struct Mesh {
     bundle: RenderBundle,
     transform: Transform,
@@ -37,6 +39,7 @@ impl Spatial for Mesh {
 /// TODO: I need to change this so it doesn't use the same barycentric coord stuf that PixelMesh
 /// needs.
 impl Mesh {
+    /// Create a new mesh renderable
     pub fn new(
         mesh: Rc<Arc<CountedBuffer>>,
         tex: Rc<Arc<(Texture, TextureViewDescriptor)>>,

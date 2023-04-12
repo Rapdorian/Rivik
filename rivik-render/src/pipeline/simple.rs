@@ -1,3 +1,5 @@
+//! Pipeline for a pixel mesh
+
 use once_cell::sync::Lazy;
 use wgpu::{BindGroupLayout, RenderPipeline};
 
@@ -5,6 +7,7 @@ use crate::{context::device, shader, transform};
 
 use super::{vertex3d::Vertex3D, GBuffer};
 
+/// Render pipeline for a static pixelated mesh
 pub static PIPELINE: Lazy<RenderPipeline> = Lazy::new(|| {
     GBuffer::geom_pipeline(
         &shader!("../shaders/simple3d.wgsl").unwrap(),
@@ -13,6 +16,7 @@ pub static PIPELINE: Lazy<RenderPipeline> = Lazy::new(|| {
     )
 });
 
+/// texture layout for a simple mesh
 pub static TEX_LAYOUT: Lazy<BindGroupLayout> = Lazy::new(|| {
     device().create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: None,

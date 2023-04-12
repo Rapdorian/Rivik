@@ -1,12 +1,12 @@
-use std::{borrow::Borrow, ops::Deref};
+use std::borrow::Borrow;
 
 use crate::{
-    context::{device, gbuffer, queue, surface_config},
+    context::{device, gbuffer, queue},
     pipeline::{ambient, GBuffer},
     transform::Spatial,
     Transform,
 };
-use ultraviolet::{Vec3, Vec4};
+use ultraviolet::Vec4;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BindGroupDescriptor, BindGroupEntry, BindingResource, Buffer, BufferBinding, BufferUsages,

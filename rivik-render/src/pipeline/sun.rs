@@ -1,15 +1,17 @@
+//! Render pipeline for a directional light
+
 use std::{borrow::Cow, num::NonZeroU64};
 
 use once_cell::sync::OnceCell;
 use wgpu::{
-    BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Buffer,
+    BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
     BufferBindingType, ColorTargetState, ColorWrites, FragmentState, MultisampleState,
     PipelineLayoutDescriptor, PrimitiveState, RenderPipeline, RenderPipelineDescriptor,
     ShaderStages, VertexState,
 };
 
 use crate::{
-    context::{device, gbuffer, surface_config},
+    context::{device, gbuffer},
     shader, transform,
 };
 

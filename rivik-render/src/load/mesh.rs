@@ -3,10 +3,7 @@
 use std::ops::Deref;
 
 use assets::{
-    formats::{
-        mesh::{Mesh, Vert},
-        FormatError,
-    },
+    formats::{mesh::Mesh, FormatError},
     load, AssetLoadError, Format, Path,
 };
 use wgpu::{
@@ -14,7 +11,7 @@ use wgpu::{
     Buffer, BufferUsages,
 };
 
-use crate::{context::device, pipeline::Vertex3D};
+use crate::context::device;
 
 /// Import format for a Mesh
 ///
@@ -52,16 +49,19 @@ where
     }
 }
 
+/// A GPU buffer with a length
 pub struct CountedBuffer {
     len: u32,
     buffer: Buffer,
 }
 
 impl CountedBuffer {
+    /// Creates a new `CountedBuffer`
     pub fn new(buf: Buffer, len: u32) -> Self {
         Self { len, buffer: buf }
     }
 
+    /// Get the length of this buffer
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> u32 {
         self.len
