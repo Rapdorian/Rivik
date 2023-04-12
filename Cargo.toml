@@ -1,5 +1,5 @@
 [workspace]
 resolver = "2"
 members = [
-    "rivik-render",
+    "rivik-render", "rivik-assets",
 ]

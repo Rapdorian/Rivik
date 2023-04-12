@@ -1,0 +1,21 @@
+[package]
+name = "rivik-assets"
+version = "0.2.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+rand = "0.8"
+mint = { version = "0.5.9", features = ["serde"] }
+phf = "0.11"
+once_cell = "1.16.0"
+uriparse = { version = "0.6.4", features = ["serde"] }
+log = "0.4.17"
+image = "0.24.5"
+snafu = { version = "0.7.4", features = ["backtraces", "backtraces-impl-backtrace-crate"] }
+color-backtrace = "0.5.1"
+
+[dev-dependencies]
+env_logger = "0.10.0"
