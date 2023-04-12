@@ -817,6 +817,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ad0a93d233ebf96623465aad4046a8d3aa4da22d4f4beba5388838c8a434bbb4"
 
 [[package]]
+name = "glam"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e4afd9ad95555081e109fe1d21f2a30c691b5f0919c67dfa690a2e1eb6bd51c"
+dependencies = [
+ "mint",
+]
+
+[[package]]
 name = "glow"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1666,6 +1675,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5da3b0203fd7ee5720aa0b5e790b591aa5d3f41c3ed2c34a3a393382198af2f7"
 
 [[package]]
+name = "pollster"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22686f4785f02a4fcc856d3b3bb19bf6c8160d103f7a99cc258bddd0251dc7f2"
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1840,6 +1855,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1382d1f0a252c4bf97dc20d979a2fdd05b024acd7c2ed0f7595d7817666a157"
 
 [[package]]
+name = "rivik"
+version = "0.1.0"
+dependencies = [
+ "color-backtrace",
+ "egui-winit",
+ "glam",
+ "mint",
+ "pollster 0.3.0",
+ "rivik-assets",
+ "rivik-render",
+ "rivik-scene",
+ "tracing",
+ "tracing-subscriber",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
 name = "rivik-assets"
 version = "0.2.0"
 dependencies = [
@@ -1871,7 +1904,7 @@ dependencies = [
  "mint",
  "once_cell",
  "palette",
- "pollster",
+ "pollster 0.2.5",
  "rand",
  "renderdoc",
  "rivik-assets",
@@ -1885,6 +1918,10 @@ dependencies = [
  "wgpu_macros",
  "winit",
 ]
+
+[[package]]
+name = "rivik-scene"
+version = "0.1.0"
 
 [[package]]
 name = "rustc-demangle"
