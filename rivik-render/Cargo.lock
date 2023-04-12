@@ -1771,7 +1771,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1382d1f0a252c4bf97dc20d979a2fdd05b024acd7c2ed0f7595d7817666a157"
 
 [[package]]
-name = "rivik-render"
+name = "rivik_assets"
+version = "0.2.0"
+source = "git+https://github.com/Rapdorian/rivik_assets.git?tag=v0.2.0#000b6f018040c8486ef4a33580db46c62c0237ad"
+dependencies = [
+ "color-backtrace",
+ "image",
+ "log",
+ "mint",
+ "once_cell",
+ "phf",
+ "rand",
+ "serde",
+ "snafu",
+ "uriparse",
+]
+
+[[package]]
+name = "rivik_render"
 version = "0.2.0"
 dependencies = [
  "bytemuck",
@@ -1798,23 +1815,6 @@ dependencies = [
  "wgpu",
  "wgpu_macros",
  "winit",
-]
-
-[[package]]
-name = "rivik_assets"
-version = "0.2.0"
-source = "git+https://github.com/Rapdorian/rivik_assets.git?tag=v0.2.0#000b6f018040c8486ef4a33580db46c62c0237ad"
-dependencies = [
- "color-backtrace",
- "image",
- "log",
- "mint",
- "once_cell",
- "phf",
- "rand",
- "serde",
- "snafu",
- "uriparse",
 ]
 
 [[package]]
