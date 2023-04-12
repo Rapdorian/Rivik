@@ -1,6 +1,5 @@
 use std::{borrow::Borrow, rc::Rc, sync::Arc};
 
-use assets::formats::{self, mesh::Vert};
 use wgpu::{
     RenderBundle, RenderBundleDescriptor, RenderBundleEncoderDescriptor, Texture,
     TextureViewDescriptor,
@@ -9,34 +8,29 @@ use wgpu::{
 use crate::{
     context::device,
     load::CountedBuffer,
-    pipeline::{
-        mesh::{self, MeshVertex},
-        simple, GBuffer,
-    },
+    pipeline::{simple, sky_box, GBuffer},
     transform::{self, Spatial},
     Transform,
 };
 
-pub struct Mesh {
+pub struct SkyMesh {
     bundle: RenderBundle,
     transform: Transform,
 }
 
-impl Borrow<RenderBundle> for Mesh {
+impl Borrow<RenderBundle> for SkyMesh {
     fn borrow(&self) -> &RenderBundle {
         &self.bundle
     }
 }
 
-impl Spatial for Mesh {
+impl Spatial for SkyMesh {
     fn transform(&self) -> &Transform {
         &self.transform
     }
 }
 
-/// TODO: I need to change this so it doesn't use the same barycentric coord stuf that PixelMesh
-/// needs.
-impl Mesh {
+impl SkyMesh {
     pub fn new(
         mesh: Rc<Arc<CountedBuffer>>,
         tex: Rc<Arc<(Texture, TextureViewDescriptor)>>,
@@ -82,7 +76,7 @@ impl Mesh {
         });
 
         // start recording render commands
-        bundle.set_pipeline(&*mesh::PIPELINE);
+        bundle.set_pipeline(&*sky_box::PIPELINE);
         bundle.set_bind_group(0, &texture_group, &[]);
         bundle.set_bind_group(1, &transform_binding, &[]);
         bundle.set_vertex_buffer(0, mesh.slice(..));
@@ -90,34 +84,4 @@ impl Mesh {
         let bundle = bundle.finish(&RenderBundleDescriptor { label: None });
         Self { bundle, transform }
     }
-}
-
-/// Generate a vertex buffer for a given mesh
-pub fn vertex_buffer(mesh: &formats::mesh::Mesh<f32>) -> (Vec<u8>, usize) {
-    let mut verts: Vec<MeshVertex> = vec![];
-    for (a, b, c) in mesh.faces() {
-        let gen_vert = |v: Vert| {
-            let norm = v.norm.unwrap_or(mint::Point3 {
-                x: 0.0,
-                y: 0.0,
-                z: 0.0,
-            });
-            let uv = v.uv.unwrap_or(mint::Point2 { x: 0.0, y: 0.0 });
-            MeshVertex {
-                pos: [v.pos.x, v.pos.y, v.pos.z],
-                norm: [norm.x, norm.y, norm.z],
-                uv: [uv.x, uv.y],
-            }
-        };
-        verts.push(gen_vert(a));
-        verts.push(gen_vert(b));
-        verts.push(gen_vert(c));
-    }
-
-    // create buffer out of vertex list
-    let mut buffer = vec![];
-    for v in &verts {
-        buffer.extend_from_slice(bytemuck::bytes_of(v));
-    }
-    (buffer, verts.len())
 }

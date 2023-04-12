@@ -31,6 +31,11 @@ var g_pos: texture_2d<f32>;
 @binding(3)
 var g_norm: texture_2d<f32>;
 
+
+@group(0)
+@binding(4)
+var g_lum: texture_2d<f32>;
+
 struct LightData{
     color: vec4<f32>,
 }
@@ -42,5 +47,9 @@ var<uniform> light_data: LightData;
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let col = textureSample(g_color, samplr, in.uv);
-    return col * light_data.color;
+    let lum = textureSample(g_lum, samplr, in.uv);
+
+    let lum_col = col * lum;
+    let light = col * light_data.color;
+    return max(light, lum_col);
 }

@@ -3,6 +3,8 @@ use std::{borrow::Borrow, ops::Deref};
 use crate::{
     context::{device, gbuffer, queue, surface_config},
     pipeline::{ambient, GBuffer},
+    transform::Spatial,
+    Transform,
 };
 use ultraviolet::{Vec3, Vec4};
 use wgpu::{
@@ -15,6 +17,13 @@ use wgpu::{
 pub struct AmbientLight {
     bundle: RenderBundle,
     buffer: Buffer,
+    transform: Transform,
+}
+
+impl Spatial for AmbientLight {
+    fn transform(&self) -> &Transform {
+        &self.transform
+    }
 }
 
 impl AmbientLight {
@@ -28,7 +37,11 @@ impl AmbientLight {
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
         let bundle = ambient_light(&buffer);
-        Self { bundle, buffer }
+        Self {
+            bundle,
+            buffer,
+            transform: Transform::default(),
+        }
     }
 
     /// Queues a write to the internal buffer for this ambient lights color

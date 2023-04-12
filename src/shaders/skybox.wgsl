@@ -2,7 +2,6 @@ struct VertexOutput {
     @location(0) tex_coord: vec2<f32>,
     @location(1) norm: vec4<f32>,
     @builtin(position) position: vec4<f32>,
-    @location(2) view_position: vec4<f32>,
 }
 
 struct Locals {
@@ -23,9 +22,16 @@ fn vs_main(
 ) -> VertexOutput {
     var out: VertexOutput;
     out.tex_coord = vec2<f32>(tex_coord.x, 1.0 - tex_coord.y);
-    out.position = r_locals.mvp * vec4<f32>(position.xyz, 1.0);
-    out.view_position = r_locals.mv * vec4<f32>(position.xyz, 1.0);
-    out.norm = r_locals.mv_norm* vec4<f32>(norm.xyz, 0.0);
+    var mvp = r_locals.mvp;
+
+    // remove translation component so that we render relative to camera
+    mvp[3] = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+    out.position= mvp * vec4<f32>(position,1.0);
+
+    // render with an infinite depth
+    out.position.z = out.position.w;
+    out.norm = mvp * vec4<f32>(norm.xyz, 0.0);
+
     return out;
 }
 
@@ -53,8 +59,9 @@ fn fs_main(in: VertexOutput) -> GBuffer {
     var gbuffer: GBuffer;
 
     gbuffer.color = textureSample(g_diffuse, samplr, in.tex_coord);
-    gbuffer.pos = in.view_position;
+    gbuffer.pos = in.position;
     gbuffer.normal = in.norm;
+    gbuffer.lum = vec4<f32>(1.0, 1.0, 1.0, 1.0);
 
     return gbuffer;
 }

@@ -10,7 +10,7 @@ use crate::{
     context::device,
     load::CountedBuffer,
     pipeline::{simple, GBuffer, Vertex3D},
-    transform::Spatial,
+    transform::{self, Spatial},
     Transform,
 };
 
@@ -41,7 +41,7 @@ impl PixelMesh {
 
         // create bind group for uniform buffer
         let uniform = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: simple::layout(),
+            layout: transform::layout(),
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: transform.buffer().as_entire_binding(),
@@ -62,7 +62,7 @@ impl PixelMesh {
 
         let texture_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
-            layout: simple::texture_layout(),
+            layout: &*simple::TEX_LAYOUT,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -76,7 +76,7 @@ impl PixelMesh {
         });
 
         // start recording render commands
-        bundle.set_pipeline(simple::pipeline());
+        bundle.set_pipeline(&*simple::PIPELINE);
         bundle.set_bind_group(0, &texture_group, &[]);
         bundle.set_bind_group(1, &uniform, &[]);
         bundle.set_vertex_buffer(0, mesh.slice(..));

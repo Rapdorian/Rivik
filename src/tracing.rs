@@ -11,14 +11,15 @@ use std::{
 };
 
 use egui::{
-    plot::{Bar, BarChart, PlotUi},
+    plot::{Bar, BarChart, PlotBounds, PlotUi},
     Color32, Stroke,
 };
 use once_cell::sync::Lazy;
 use palette::{FromColor, Srgb};
 use tracing::{
-    event,
+    debug, event,
     field::Visit,
+    info,
     span::{Attributes, Record},
     Id, Level, Subscriber,
 };
@@ -128,14 +129,13 @@ fn generate_events() -> Vec<Bar> {
     chart
 }
 
-#[tracing::instrument]
 pub fn generate_chart() -> (Vec<Bar>, Vec<Bar>) {
     let mut chart = Vec::new();
 
     for span in &*FRAME_SPANS.read().unwrap() {
         let end = match span.end {
             Some(e) => e,
-            None => *FRAME_START.read().unwrap() + Duration::from_millis(1000 / 60),
+            None => panic!("This shouldn't happen"),
         };
 
         // create a color for this span

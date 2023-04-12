@@ -55,6 +55,10 @@ var g_pos: texture_2d<f32>;
 @binding(3)
 var g_norm: texture_2d<f32>;
 
+@group(0)
+@binding(4)
+var g_lum: texture_2d<f32>;
+
 
 fn sq_len(v: vec3<f32>) -> f32 {
     return v.x * v.x + v.y * v.y;
@@ -65,16 +69,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let norm = textureSample(g_norm, samplr, in.uv).xyz;
     let col = textureSample(g_color, samplr, in.uv);
     let pos = textureSample(g_pos, samplr, in.uv).xyz;
+    let lum = textureSample(g_lum, samplr, in.uv);
 
-    let light_dir = in.dir.xyz;
-    var power = max(dot(norm, normalize(light_dir)), 0.0);
+    let light_dir = normalize(in.dir.xyz);
+    var power = max(dot(norm, light_dir), 0.0);
 
     // TODO: Specular strength/intensity should be in the gbuffer
     let spec_str = 0.5;
-    let shininess = 16.0;
+    let shininess = 32.0;
 
     let refl_dir = reflect(-light_dir, norm);
-    var spec = spec_str * pow(clamp(dot(normalize(-pos), refl_dir), 0.0, 1.0), shininess);
+    var spec = spec_str * pow(dot(normalize(-pos), refl_dir), shininess);
 
     // power = round(power * 4.) / 4.;
     // spec = round(spec* 4.) / 4.;
@@ -82,5 +87,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // let towardsLight = dot(norm, normalize(light_dir));
     // let lightIntensity = step(0., towardsLight);
 
-    return col * (power * in.color);
+    // dont do light computation if there is lum; (it will be done in ambient)
+    let light = col * ((power + spec) * in.color);
+    let inv_lum = vec4<f32>(1.0, 1.0, 1.0, 1.0) - lum;
+
+    return min(light, inv_lum);
 }

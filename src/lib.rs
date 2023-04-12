@@ -26,9 +26,11 @@ pub mod load {
 pub mod draw {
     pub mod mesh;
     pub mod pixel_mesh;
+    pub mod skymesh;
 
     pub use mesh::Mesh;
     pub use pixel_mesh::PixelMesh;
+    pub use skymesh::SkyMesh;
 }
 
 /// Containts render bundle creation methods for screen filters
@@ -49,11 +51,11 @@ pub mod pipeline {
     pub mod gbuffer;
     pub mod mesh;
     pub mod simple;
+    pub mod sky_box;
     pub mod sun;
     pub mod vertex3d;
 
     pub use gbuffer::GBuffer;
-    pub use simple::Simple3DPipeline;
     pub use vertex3d::Vertex3D;
 
     pub const LIGHT_BLEND: wgpu::BlendState = wgpu::BlendState {
