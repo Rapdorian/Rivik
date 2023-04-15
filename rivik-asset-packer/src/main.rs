@@ -1,15 +1,13 @@
 //! Tool for generating packed lump files from a series of game assets.
 
-use asset_packer::{pack, FastHash};
-use clap::{arg, Parser};
-use serde::{Deserialize, Serialize};
-use snafu::ErrorCompat;
+use std::fs;
 
-#[derive(Serialize, Deserialize)]
-enum Entry {
-    /// Data that is to be included verbatim in the lump file
-    Buffer { path: String },
-}
+use asset_packer::{
+    manifest::{Entry, ManifestBuilder},
+    pack::{self, FastHash},
+};
+use clap::{arg, Parser};
+use snafu::ErrorCompat;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -21,11 +19,23 @@ struct Args {
     // hash function selection
     #[arg(short = 'H', long, value_enum, default_value_t = FastHash::default())]
     hash: FastHash,
+
+    #[arg(short, long)]
+    manifest: Option<String>,
 }
 
 fn main() {
     let args = Args::parse();
-    if let Err(e) = pack(args.output, &args.files, &args.hash) {
+
+    let manifest = match args.manifest {
+        None => args.files.into_iter().map(|file| Entry::new(file)).fold(
+            ManifestBuilder::new().with_hash(args.hash),
+            |manifest, file| manifest.push(file),
+        ),
+        Some(path) => toml::from_str(&fs::read_to_string(path).unwrap()).unwrap(),
+    };
+
+    if let Err(e) = manifest.build(args.output) {
         eprintln!("Error: {}", e);
 
         if e.iter_chain().skip(1).next().is_some() {

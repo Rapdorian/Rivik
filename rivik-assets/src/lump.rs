@@ -73,6 +73,22 @@ impl AsRef<[u8]> for LumpChunk {
     }
 }
 
+impl Read for LumpChunk {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let len = buf.len().min(self.end - self.start);
+        let read_to = self.start + len;
+
+        for (byte, out) in self.lump.reader[self.start..read_to]
+            .iter()
+            .zip(buf.iter_mut())
+        {
+            *out = *byte;
+        }
+        self.start = read_to;
+        Ok(len)
+    }
+}
+
 impl Lump {
     pub fn precache(path: &str) -> Arc<Lump> {
         let mut hash = DefaultHasher::new();

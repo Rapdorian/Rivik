@@ -7,7 +7,7 @@ fn main() {
         Report::capture(|| -> Result<(), AssetLoadError> {
             let cache = Lump::precache("test.lump");
             load("lump:test.lump#assets/cube.obj", Txt)?;
-            load("lump:test.lump#assets/cube.obj", Txt)?;
+            load("lump:test.lump?#assets/cube.obj", Txt)?;
             Ok(())
         })
     );

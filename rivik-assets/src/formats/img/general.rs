@@ -1,9 +1,9 @@
-use std::io::BufReader;
+use std::io::{self, BufReader, Cursor};
 
 use crate::{formats::Format, Path, ReaderCreationError};
 
-use image::DynamicImage;
 pub use image::ImageFormat;
+use image::{io::Reader, DynamicImage};
 use snafu::{Backtrace, ResultExt, Snafu};
 
 /// Wrapper around using the `image` crate to parse images
@@ -21,14 +21,22 @@ pub enum ImageParseError {
         source: image::ImageError,
         backtrace: Backtrace,
     },
+    #[snafu(display("Failed to read buffer"))]
+    ReadError {
+        source: io::Error,
+        backtrace: Backtrace,
+    },
 }
 
 impl Format for Img {
     type Output = DynamicImage;
     type Error = ImageParseError;
     fn parse(&self, path: &Path) -> Result<Self::Output, Self::Error> {
-        let reader = BufReader::new(path.reader().context(CreationSnafu)?);
-
-        Ok(image::load(reader, self.0).context(ImageSnafu)?)
+        let mut buf = Vec::new();
+        path.reader()
+            .context(CreationSnafu)?
+            .read_to_end(&mut buf)
+            .context(ReadSnafu)?;
+        Ok(Reader::new(Cursor::new(buf)).decode().context(ImageSnafu)?)
     }
 }

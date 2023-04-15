@@ -12,3 +12,7 @@ fasthash = "0.4.0"
 serde = { version = "1.0.160", features = ["derive"] }
 snafu = "0.7.4"
 color-backtrace = "0.5.1"
+brotli = "3.3.4"
+rust-lzma = "0.6.0"
+flate2 = "1.0.25"
+toml = "0.7.3"

@@ -7,7 +7,10 @@ use std::{
     path::PathBuf,
 };
 
-use fasthash::SeaHasher;
+use fasthash::{
+    CityHasher, FarmHasher, FastHasher, MetroHasher, MumHasher, Murmur2Hasher, Murmur3Hasher,
+    MurmurHasher, SeaHasher, SpookyHasher, T1haHasher, XXHasher,
+};
 use snafu::{Backtrace, IntoError, OptionExt, ResultExt, Snafu};
 use uriparse::{Scheme, URIReference};
 
@@ -21,8 +24,8 @@ use crate::{
 ///
 /// defaults to a file path if scheme is not specificed
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
-pub enum Path {
-    /// Filesystem path
+enum SourceType {
+    /// Filesystem pathhash=mum
     /// Loads the asset from disk using the provided filepath
     File(PathBuf),
     /// Chunk
@@ -35,7 +38,20 @@ pub enum Path {
     /// Loads a lump file from disk and fetch a chunk out of it
     /// # Example
     /// `lump:path/to/file.bin#path/to/asset.jpg`
-    Lump(PathBuf, String),
+    Lump(PathBuf, String, Option<String>),
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+enum CompressionAlg {
+    Brotli,
+    Lzma,
+    Deflate,
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+pub struct Path {
+    source: SourceType,
+    compression: Option<CompressionAlg>,
 }
 
 #[derive(Snafu, Debug)]
@@ -83,21 +99,52 @@ impl TryFrom<&str> for Path {
         let mut scheme = uri.scheme().unwrap_or(&Scheme::File).clone();
         scheme.normalize();
 
+        let compression = uri.query().and_then(|o| {
+            o.split("&")
+                .filter_map(|t| match t.to_lowercase().as_str() {
+                    "deflate" | "flate" => Some(CompressionAlg::Deflate),
+                    "brotli" => Some(CompressionAlg::Brotli),
+                    "lzma" => Some(CompressionAlg::Lzma),
+                    _ => None,
+                })
+                .next()
+        });
+
         let not_a_uri = |e| PathParseError::not_a_uri(path, e);
         let base = uri.path().to_string().into();
         match scheme.as_ref() {
-            "file" => Ok(Path::File(base)),
-            "bin" => Ok(Path::Chunk(
-                base,
-                uri.fragment()
-                    .map(|frag| u128::from_str_radix(frag, 16))
-                    .transpose()
-                    .map_err(not_a_uri)?,
-            )),
-            "lump" => Ok(Path::Lump(
-                base,
-                uri.fragment().context(NoFragmentSnafu)?.to_string(),
-            )),
+            "file" => Ok(Path {
+                source: SourceType::File(base),
+                compression,
+            }),
+            "bin" => Ok(Path {
+                source: SourceType::Chunk(
+                    base,
+                    uri.fragment()
+                        .map(|frag| u128::from_str_radix(frag, 16))
+                        .transpose()
+                        .map_err(not_a_uri)?,
+                ),
+                compression,
+            }),
+            "lump" => {
+                //
+                let hash = uri.query().and_then(|q| {
+                    q.split("&")
+                        .filter(|t| t.starts_with("hash="))
+                        .flat_map(|t| t.strip_prefix("hash="))
+                        .map(|t| t.to_owned())
+                        .next()
+                });
+                Ok(Path {
+                    source: SourceType::Lump(
+                        base,
+                        uri.fragment().context(NoFragmentSnafu)?.to_string(),
+                        hash,
+                    ),
+                    compression,
+                })
+            }
             scheme => Err(PathParseError::unsupported_scheme(scheme)),
         }
     }
@@ -121,22 +168,26 @@ impl TryFrom<&String> for Path {
 
 impl Display for Path {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Path::File(p) => match p.is_absolute() {
+        match &self.source {
+            SourceType::File(p) => match p.is_absolute() {
                 true => write!(f, "file://{}", p.to_string_lossy()),
                 false => write!(f, "file:{}", p.to_string_lossy()),
             },
-            Path::Chunk(p, Some(id)) => match p.is_absolute() {
+            SourceType::Chunk(p, Some(id)) => match p.is_absolute() {
                 true => write!(f, "bin://{}#{:X}", p.to_string_lossy(), id),
                 false => write!(f, "bin:{}#{:X}", p.to_string_lossy(), id),
             },
-            Path::Chunk(p, None) => match p.is_absolute() {
+            SourceType::Chunk(p, None) => match p.is_absolute() {
                 true => write!(f, "bin://{}", p.to_string_lossy()),
                 false => write!(f, "bin:{}", p.to_string_lossy()),
             },
-            Path::Lump(p, name) => match p.is_absolute() {
+            SourceType::Lump(p, name, None) => match p.is_absolute() {
                 true => write!(f, "lump://{}#{name}", p.to_string_lossy()),
                 false => write!(f, "lump:{}#{name}", p.to_string_lossy()),
+            },
+            SourceType::Lump(p, name, Some(hash)) => match p.is_absolute() {
+                true => write!(f, "lump://{}?hash={hash}#{name}", p.to_string_lossy()),
+                false => write!(f, "lump:{}?hash={hash}#{name}", p.to_string_lossy()),
             },
         }
     }
@@ -170,6 +221,10 @@ pub enum ReaderCreationError {
     },
     #[snafu(display("Unsupported path format"))]
     UnsupportedPath { path: Path, backtrace: Backtrace },
+    LzmaError {
+        source: lzma::LzmaError,
+        backtrace: Backtrace,
+    },
 }
 
 impl ReaderCreationError {
@@ -190,36 +245,60 @@ impl ReaderCreationError {
     }
 }
 
-pub(crate) trait AssetReader: Read + Seek {}
-impl<T: Read + Seek> AssetReader for T {}
+pub(crate) trait AssetReader: Read {}
+impl<T: Read> AssetReader for T {}
 
 impl Path {
     pub(crate) fn reader(&self) -> Result<Box<dyn AssetReader>, ReaderCreationError> {
         let io_error = |e| ReaderCreationError::io_error(self, e);
-        match self {
-            Path::File(path) => Ok(Box::new(File::open(path).map_err(io_error)?)),
-            Path::Chunk(path, Some(id)) => {
+        let reader: Box<dyn AssetReader> = match &self.source {
+            SourceType::File(path) => Box::new(File::open(path).map_err(io_error)?),
+            SourceType::Chunk(path, Some(id)) => 'block: {
                 // find chunk in file
                 let mut file = File::open(path).map_err(io_error)?;
                 while let Ok(chunk) = file.chunk() {
                     if chunk.id() == *id {
-                        return Ok(Box::new(chunk.read().map_err(io_error)?));
+                        break 'block Box::new(chunk.read().map_err(io_error)?);
                     }
                 }
-                Err(ReaderCreationError::missing_chunk(self, *id))
+                return Err(ReaderCreationError::missing_chunk(self, *id));
             }
-            Path::Lump(path, name) => {
+            SourceType::Lump(path, name, hash) => {
                 // create a unique hash for the uderlying mmap
                 let lump = Lump::precache(&path.display().to_string());
-                let chunk = lump
-                    .arc_named_chunk::<SeaHasher>(name)
-                    .context(MissingLumpSnafu {
-                        path: self.clone(),
-                        id: name,
-                    })?;
-                Ok(Box::new(Cursor::new(chunk)))
+                let chunk = match hash.as_ref().map(|a| a.as_str()) {
+                    Some("city") => lump.arc_named_chunk::<CityHasher>(name),
+                    Some("farm") => lump.arc_named_chunk::<FarmHasher>(name),
+                    Some("metro") => lump.arc_named_chunk::<MetroHasher>(name),
+                    Some("mum") => lump.arc_named_chunk::<MumHasher>(name),
+                    Some("murmur") => lump.arc_named_chunk::<MurmurHasher>(name),
+                    Some("murmur2") => lump.arc_named_chunk::<Murmur2Hasher>(name),
+                    Some("murmur3") => lump.arc_named_chunk::<Murmur3Hasher>(name),
+                    Some("spooky") => lump.arc_named_chunk::<SpookyHasher>(name),
+                    Some("t1ha") => lump.arc_named_chunk::<T1haHasher>(name),
+                    Some("xx") => lump.arc_named_chunk::<XXHasher>(name),
+                    _ => lump.arc_named_chunk::<SeaHasher>(name),
+                }
+                .context(MissingLumpSnafu {
+                    path: self.clone(),
+                    id: name,
+                })?;
+                Box::new(chunk)
             }
-            _ => Err(ReaderCreationError::unsupported_path(self)),
+            _ => return Err(ReaderCreationError::unsupported_path(self)),
+        };
+
+        if let Some(alg) = &self.compression {
+            // wrap reader in a decompresser
+            match alg {
+                CompressionAlg::Brotli => Ok(Box::new(brotli::Decompressor::new(reader, 2048))),
+                CompressionAlg::Lzma => Ok(Box::new(
+                    lzma::LzmaReader::new_decompressor(reader).context(LzmaSnafu)?,
+                )),
+                CompressionAlg::Deflate => Ok(Box::new(flate2::read::DeflateDecoder::new(reader))),
+            }
+        } else {
+            Ok(reader)
         }
     }
 }

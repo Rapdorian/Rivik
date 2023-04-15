@@ -19,6 +19,9 @@ color-backtrace = "0.5.1"
 byteorder = "1.4.3"
 fasthash = "0.4.0"
 memmap2 = "0.5.10"
+brotli = "3.3.4"
+rust-lzma = "0.6.0"
+flate2 = "1.0.25"
 
 [dev-dependencies]
 env_logger = "0.10.0"
