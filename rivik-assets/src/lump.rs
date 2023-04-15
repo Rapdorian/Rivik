@@ -119,7 +119,7 @@ impl Lump {
         for _ in 0..length {
             let id = reader.read_u32::<LittleEndian>().unwrap();
             let offset = reader.read_u64::<LittleEndian>().unwrap();
-            let len = reader.read_u64::<LittleEndian>().unwrap();
+            let len = reader.read_u32::<LittleEndian>().unwrap() as u64;
             toc.push(Entry { id, offset, len });
         }
         toc.sort_unstable_by(|a, b| a.id.cmp(&b.id));

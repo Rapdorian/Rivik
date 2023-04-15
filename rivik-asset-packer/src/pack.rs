@@ -107,7 +107,7 @@ pub(crate) fn pack(
     );
 
     // write table of contents
-    let toc_size = (contents.len() * (size_of::<u32>() + size_of::<u64>() + size_of::<u64>()))
+    let toc_size = (contents.len() * (size_of::<u32>() + size_of::<u64>() + size_of::<u32>()))
         + size_of::<u32>();
 
     let mut offset = toc_size;
@@ -116,7 +116,7 @@ pub(crate) fn pack(
             .context(FailedToWriteDataSnafu)?;
         file.write_u64::<LittleEndian>(offset as u64)
             .context(FailedToWriteDataSnafu)?;
-        file.write_u64::<LittleEndian>(buffer.len() as u64)
+        file.write_u32::<LittleEndian>(buffer.len() as u32)
             .context(FailedToWriteDataSnafu)?;
         offset += buffer.len();
     }
