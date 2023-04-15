@@ -4,7 +4,7 @@ use std::{borrow::Borrow, rc::Rc, sync::Arc};
 use assets::formats::mesh::{Mesh, Vert};
 use wgpu::{
     AddressMode, BindingResource, FilterMode, RenderBundle, RenderBundleDescriptor,
-    RenderBundleEncoderDescriptor, Texture, TextureViewDescriptor,
+    RenderBundleEncoderDescriptor, Texture, TextureView,
 };
 
 use crate::{
@@ -28,7 +28,7 @@ impl PixelMesh {
     pub fn new(
         mesh: Rc<Arc<CountedBuffer>>,
         transform: Transform,
-        tex: Rc<Arc<(Texture, TextureViewDescriptor)>>,
+        tex: Rc<Arc<(Texture, TextureView)>>,
     ) -> Self {
         // create render bundle for this asset
         let device = device();
@@ -51,7 +51,6 @@ impl PixelMesh {
         });
 
         // create texture bind group
-        let texture = tex.0.create_view(&tex.1);
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             mag_filter: FilterMode::Nearest,
             min_filter: FilterMode::Nearest,
@@ -71,7 +70,7 @@ impl PixelMesh {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::TextureView(&texture),
+                    resource: BindingResource::TextureView(&tex.1),
                 },
             ],
         });

@@ -20,8 +20,9 @@
 
 pub mod bin;
 //pub mod handle;
+pub mod lump;
 mod mgr;
-mod path;
+pub mod path;
 
 pub use formats::Format;
 pub use mgr::*;

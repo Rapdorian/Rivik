@@ -98,6 +98,7 @@ macro_rules! shader {
 }
 
 #[cfg(not(debug_assertions))]
+#[allow(missing_docs)]
 #[macro_export]
 macro_rules! shader {
     ($path:expr) => {{

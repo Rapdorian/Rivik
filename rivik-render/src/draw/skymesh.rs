@@ -1,8 +1,7 @@
 use std::{borrow::Borrow, rc::Rc, sync::Arc};
 
 use wgpu::{
-    RenderBundle, RenderBundleDescriptor, RenderBundleEncoderDescriptor, Texture,
-    TextureViewDescriptor,
+    RenderBundle, RenderBundleDescriptor, RenderBundleEncoderDescriptor, Texture, TextureView,
 };
 
 use crate::{
@@ -33,10 +32,7 @@ impl Spatial for SkyMesh {
 
 impl SkyMesh {
     /// Create a new skymesh
-    pub fn new(
-        mesh: Rc<Arc<CountedBuffer>>,
-        tex: Rc<Arc<(Texture, TextureViewDescriptor)>>,
-    ) -> Self {
+    pub fn new(mesh: Rc<Arc<CountedBuffer>>, tex: Rc<Arc<(Texture, TextureView)>>) -> Self {
         let device = device();
         let mut bundle = device.create_render_bundle_encoder(&RenderBundleEncoderDescriptor {
             label: None,
@@ -56,7 +52,6 @@ impl SkyMesh {
             label: None,
         });
 
-        let texture = tex.0.create_view(&tex.1);
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::Repeat,
             address_mode_v: wgpu::AddressMode::Repeat,
@@ -72,7 +67,7 @@ impl SkyMesh {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&texture),
+                    resource: wgpu::BindingResource::TextureView(&tex.1),
                 },
             ],
         });

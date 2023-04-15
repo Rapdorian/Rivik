@@ -3,8 +3,7 @@ use std::{borrow::Borrow, rc::Rc, sync::Arc};
 
 use assets::formats::{self, mesh::Vert};
 use wgpu::{
-    RenderBundle, RenderBundleDescriptor, RenderBundleEncoderDescriptor, Texture,
-    TextureViewDescriptor,
+    RenderBundle, RenderBundleDescriptor, RenderBundleEncoderDescriptor, Texture, TextureView,
 };
 
 use crate::{
@@ -22,6 +21,10 @@ use crate::{
 pub struct Mesh {
     bundle: RenderBundle,
     transform: Transform,
+
+    //keep the following assets alive
+    mesh: Rc<Arc<CountedBuffer>>,
+    tex: Rc<Arc<(Texture, TextureView)>>,
 }
 
 impl Borrow<RenderBundle> for Mesh {
@@ -40,10 +43,7 @@ impl Spatial for Mesh {
 /// needs.
 impl Mesh {
     /// Create a new mesh renderable
-    pub fn new(
-        mesh: Rc<Arc<CountedBuffer>>,
-        tex: Rc<Arc<(Texture, TextureViewDescriptor)>>,
-    ) -> Self {
+    pub fn new(mesh: Rc<Arc<CountedBuffer>>, tex: Rc<Arc<(Texture, TextureView)>>) -> Self {
         let device = device();
         let mut bundle = device.create_render_bundle_encoder(&RenderBundleEncoderDescriptor {
             label: None,
@@ -63,7 +63,6 @@ impl Mesh {
             label: None,
         });
 
-        let texture = tex.0.create_view(&tex.1);
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::Repeat,
             address_mode_v: wgpu::AddressMode::Repeat,
@@ -79,7 +78,7 @@ impl Mesh {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&texture),
+                    resource: wgpu::BindingResource::TextureView(&tex.1),
                 },
             ],
         });
@@ -91,7 +90,12 @@ impl Mesh {
         bundle.set_vertex_buffer(0, mesh.slice(..));
         bundle.draw(0..mesh.len(), 0..1);
         let bundle = bundle.finish(&RenderBundleDescriptor { label: None });
-        Self { bundle, transform }
+        Self {
+            bundle,
+            transform,
+            mesh,
+            tex,
+        }
     }
 }
 

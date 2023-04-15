@@ -116,7 +116,7 @@ where
 }
 
 /// Attempt to load an asset from the global cache
-fn load_cache<F>(
+pub fn load_cache<F>(
     hash: u64,
     path: Path,
     format: F,
@@ -141,8 +141,20 @@ where
     ))
 }
 
+pub(crate) fn get_cache<T: Any + Send + Sync>(hash: u64) -> Option<Arc<T>> {
+    ASSET_CACHE
+        .read()
+        .unwrap()
+        .get(&hash)
+        .and_then(|a| a.upgrade())
+        .and_then(|a| Arc::downcast(a).ok())
+}
+
 /// Add an asset to the global cache
-fn insert_cache<A: Any + Send + Sync>(hash: u64, asset: A) -> Arc<dyn Any + Send + Sync> {
+pub(crate) fn insert_cache<A: Any + Send + Sync>(
+    hash: u64,
+    asset: A,
+) -> Arc<dyn Any + Send + Sync> {
     let asset: Arc<dyn Any + Send + Sync> = Arc::new(asset);
     ASSET_CACHE
         .write()

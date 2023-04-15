@@ -20,11 +20,12 @@ mint = "0.5.9"
 
 [dev-dependencies]
 tracing-subscriber = "0.3.16"
+rivik-shader = { path = "rivik-shader" }
+asset-packer = { path = "rivik-asset-packer" }
+snafu = "0.7.4"
 
 [workspace]
 resolver = "2"
 members = [
-    "rivik-render", "rivik-assets", "rivik-scene",
+    "rivik-render", "rivik-assets", "rivik-scene", "rivik-shader", "rivik-asset-packer"
 ]
-
-

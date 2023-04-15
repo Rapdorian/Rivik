@@ -34,6 +34,7 @@ where
     fn parse(&self, path: &Path) -> Result<Self::Output, Self::Error> {
         // fetch the asset
         let asset = load(path.to_string(), self.0.clone())?;
+        println!("Fetching asset: {path}");
 
         let (buffer, len) = (self.1)(&asset);
 
@@ -73,5 +74,11 @@ impl Deref for CountedBuffer {
 
     fn deref(&self) -> &Self::Target {
         &self.buffer
+    }
+}
+
+impl Drop for CountedBuffer {
+    fn drop(&mut self) {
+        println!("Dropping a GPU vertex buffer");
     }
 }

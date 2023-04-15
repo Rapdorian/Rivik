@@ -7,7 +7,7 @@ use assets::{
 use image::{GenericImageView, ImageFormat};
 use wgpu::{
     ImageCopyTexture, ImageDataLayout, Origin3d, Texture, TextureAspect, TextureDescriptor,
-    TextureUsages, TextureViewDescriptor,
+    TextureUsages, TextureView, TextureViewDescriptor,
 };
 
 use crate::context::{device, queue};
@@ -16,7 +16,7 @@ use crate::context::{device, queue};
 pub struct GpuTexture(pub ImageFormat);
 
 impl Format for GpuTexture {
-    type Output = (Texture, TextureViewDescriptor<'static>);
+    type Output = (Texture, TextureView);
     type Error = ImageParseError;
 
     fn parse(&self, r: &assets::Path) -> Result<Self::Output, Self::Error> {
@@ -32,7 +32,7 @@ impl Format for GpuTexture {
         };
 
         let texture = device.create_texture(&TextureDescriptor {
-            label: None,
+            label: Some(&r.to_string()),
             size: texture_size,
             mip_level_count: 1,
             sample_count: 1,
@@ -52,6 +52,7 @@ impl Format for GpuTexture {
             base_array_layer: 0,
             array_layer_count: NonZeroU32::new(1),
         };
+        let view = texture.create_view(&desc);
 
         // write texture contents
         let img = image.to_rgba8();
@@ -70,6 +71,6 @@ impl Format for GpuTexture {
             },
             texture_size,
         );
-        Ok((texture, desc))
+        Ok((texture, view))
     }
 }

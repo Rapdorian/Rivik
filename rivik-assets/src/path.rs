@@ -2,14 +2,20 @@ use std::{
     error::Error as StdError,
     fmt::Display,
     fs::File,
-    io::{self, Read, Seek},
+    hash::Hash,
+    io::{self, Cursor, Read, Seek},
     path::PathBuf,
 };
 
-use snafu::{Backtrace, IntoError, Snafu};
+use fasthash::SeaHasher;
+use snafu::{Backtrace, IntoError, OptionExt, ResultExt, Snafu};
 use uriparse::{Scheme, URIReference};
 
-use crate::bin::BinRead;
+use crate::{
+    bin::BinRead,
+    lump::{ChunkFetchError, Lump},
+    AssetLoadError,
+};
 
 /// Path used to identify an asset
 ///
@@ -24,6 +30,12 @@ pub enum Path {
     /// # Example
     /// `bin:path/to/file.bin#CHUNKID`
     Chunk(PathBuf, Option<u128>),
+
+    /// Lump
+    /// Loads a lump file from disk and fetch a chunk out of it
+    /// # Example
+    /// `lump:path/to/file.bin#path/to/asset.jpg`
+    Lump(PathBuf, String),
 }
 
 #[derive(Snafu, Debug)]
@@ -39,6 +51,8 @@ pub enum PathParseError {
         scheme: String,
         backtrace: Backtrace,
     },
+    #[snafu(display("Missing Fragment from URI"))]
+    NoFragment { backtrace: Backtrace },
 }
 
 impl PathParseError {
@@ -70,14 +84,19 @@ impl TryFrom<&str> for Path {
         scheme.normalize();
 
         let not_a_uri = |e| PathParseError::not_a_uri(path, e);
+        let base = uri.path().to_string().into();
         match scheme.as_ref() {
-            "file" => Ok(Path::File(uri.path().to_string().into())),
+            "file" => Ok(Path::File(base)),
             "bin" => Ok(Path::Chunk(
-                uri.path().to_string().into(),
+                base,
                 uri.fragment()
                     .map(|frag| u128::from_str_radix(frag, 16))
                     .transpose()
                     .map_err(not_a_uri)?,
+            )),
+            "lump" => Ok(Path::Lump(
+                base,
+                uri.fragment().context(NoFragmentSnafu)?.to_string(),
             )),
             scheme => Err(PathParseError::unsupported_scheme(scheme)),
         }
@@ -115,6 +134,10 @@ impl Display for Path {
                 true => write!(f, "bin://{}", p.to_string_lossy()),
                 false => write!(f, "bin:{}", p.to_string_lossy()),
             },
+            Path::Lump(p, name) => match p.is_absolute() {
+                true => write!(f, "lump://{}#{name}", p.to_string_lossy()),
+                false => write!(f, "lump:{}#{name}", p.to_string_lossy()),
+            },
         }
     }
 }
@@ -132,6 +155,18 @@ pub enum ReaderCreationError {
         path: Path,
         id: u128,
         backtrace: Backtrace,
+    },
+    #[snafu(display("Could not create reader from {path} due to missing chunk {id}"))]
+    MissingLump {
+        path: Path,
+        id: String,
+        #[snafu(backtrace)]
+        source: ChunkFetchError,
+    },
+    #[snafu(display("Failed loading lump file as asset"))]
+    LumpLoadError {
+        #[snafu(backtrace)]
+        source: AssetLoadError,
     },
     #[snafu(display("Unsupported path format"))]
     UnsupportedPath { path: Path, backtrace: Backtrace },
@@ -172,6 +207,17 @@ impl Path {
                     }
                 }
                 Err(ReaderCreationError::missing_chunk(self, *id))
+            }
+            Path::Lump(path, name) => {
+                // create a unique hash for the uderlying mmap
+                let lump = Lump::precache(&path.display().to_string());
+                let chunk = lump
+                    .arc_named_chunk::<SeaHasher>(name)
+                    .context(MissingLumpSnafu {
+                        path: self.clone(),
+                        id: name,
+                    })?;
+                Ok(Box::new(Cursor::new(chunk)))
             }
             _ => Err(ReaderCreationError::unsupported_path(self)),
         }
