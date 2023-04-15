@@ -4,7 +4,7 @@ use std::fs;
 
 use asset_packer::{
     manifest::{Entry, ManifestBuilder},
-    pack::{self, FastHash},
+    FastHash,
 };
 use clap::{arg, Parser};
 use snafu::ErrorCompat;
@@ -44,12 +44,6 @@ fn main() {
 
         for (n, err) in e.iter_chain().skip(1).enumerate() {
             eprintln!("\t{n}: {err}");
-        }
-
-        if let Some(backtrace) = e.backtrace() {
-            color_backtrace::BacktracePrinter::new()
-                .print_trace(backtrace, &mut color_backtrace::default_output_stream())
-                .unwrap();
         }
     }
 }

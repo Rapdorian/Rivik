@@ -15,6 +15,7 @@ use crate::manifest::Entry;
 
 #[derive(ValueEnum, Debug, Clone, Default, Serialize, Deserialize)]
 #[clap(rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum FastHash {
     City,
     Farm,

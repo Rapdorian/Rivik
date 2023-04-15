@@ -6,3 +6,4 @@ pub(crate) mod pack;
 
 pub use manifest::Entry;
 pub use manifest::ManifestBuilder;
+pub use pack::FastHash;

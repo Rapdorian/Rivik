@@ -19,6 +19,7 @@ pub enum CompressError {
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum CompressionAlg {
     Brotli,
     Lzma,

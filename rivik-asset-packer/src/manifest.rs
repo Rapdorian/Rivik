@@ -1,6 +1,7 @@
 //! Parse a description of a LUMP file and create it
 
 use std::{
+    collections::HashMap,
     fs::File,
     io::{self, Read},
     path::Path,
@@ -15,11 +16,55 @@ use crate::{
 };
 
 /// An entry in a LUMP file.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(from = "EntryRepr")]
+#[serde(into = "EntryRepr")]
 pub struct Entry {
     path: String,
     name: Option<String>,
     compress: Option<CompressionAlg>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+enum EntryRepr {
+    Path(String),
+    Entry {
+        path: String,
+        compress: Option<CompressionAlg>,
+        name: Option<String>,
+    },
+}
+
+impl From<Entry> for EntryRepr {
+    fn from(value: Entry) -> Self {
+        if value.compress.is_none() && value.name.is_none() {
+            EntryRepr::Path(value.path)
+        } else {
+            EntryRepr::Entry {
+                path: value.path,
+                compress: value.compress,
+                name: value.name,
+            }
+        }
+    }
+}
+
+impl From<EntryRepr> for Entry {
+    fn from(value: EntryRepr) -> Self {
+        match value {
+            EntryRepr::Path(path) => Entry::new(path),
+            EntryRepr::Entry {
+                path,
+                compress,
+                name,
+            } => Entry {
+                path,
+                name,
+                compress,
+            },
+        }
+    }
 }
 
 impl Entry {
@@ -87,10 +132,50 @@ impl Entry {
 }
 
 /// Describes the contents of a LUMP file
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[serde(from = "ManifestRepr")]
+#[serde(into = "ManifestRepr")]
 pub struct ManifestBuilder {
     hash: FastHash,
     files: Vec<Entry>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct ManifestRepr {
+    hash: FastHash,
+    files: HashMap<String, Entry>,
+}
+
+impl From<ManifestBuilder> for ManifestRepr {
+    fn from(value: ManifestBuilder) -> Self {
+        let mut entries = HashMap::new();
+        for mut entry in value.files {
+            let name = entry.name().to_string();
+            entry.name = None;
+            entries.insert(name, entry);
+        }
+        Self {
+            hash: value.hash,
+            files: entries,
+        }
+    }
+}
+
+impl From<ManifestRepr> for ManifestBuilder {
+    fn from(value: ManifestRepr) -> Self {
+        let mut entries = Vec::new();
+        for (k, v) in value.files.into_iter() {
+            if v.name.is_none() {
+                entries.push(v.rename(k));
+            } else {
+                entries.push(v);
+            }
+        }
+        Self {
+            hash: value.hash,
+            files: entries,
+        }
+    }
 }
 
 impl ManifestBuilder {
