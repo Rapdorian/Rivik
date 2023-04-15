@@ -142,6 +142,7 @@ pub struct ManifestBuilder {
 
 #[derive(Serialize, Deserialize, Clone)]
 struct ManifestRepr {
+    #[serde(default)]
     hash: FastHash,
     files: HashMap<String, Entry>,
 }
