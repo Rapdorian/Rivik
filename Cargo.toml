@@ -18,13 +18,14 @@ glam = {version = "0.23.0" , features= ["mint"]}
 tracing = "0.1.37"
 wgpu = "0.15.1"
 mint = "0.5.9"
+legion = "0.4.0"
 
 [dev-dependencies]
 tracing-subscriber = "0.3.16"
 rivik-shader = { path = "rivik-shader" }
-asset-packer = { path = "rivik-asset-packer" }
 snafu = "0.7.4"
 toml = "0.7.3"
+asset-packer = { path = "rivik-asset-packer" }
 
 [workspace]
 resolver = "2"

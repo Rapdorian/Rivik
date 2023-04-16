@@ -24,6 +24,7 @@ use std::{
 pub use egui_winit::egui;
 use egui_winit::egui::{plot::Plot, TopBottomPanel};
 use glam::{Mat4, Vec3};
+use legion::{systems::Builder, Resources, Schedule, World};
 use pollster::block_on;
 use render::{
     context::{resize, surface_config},
@@ -45,6 +46,102 @@ use winit::{
     window::WindowBuilder,
 };
 
+mod components {
+    use crate::Renderable;
+
+    pub struct Light(pub Box<dyn Renderable + Send + Sync>);
+    pub struct Geom(pub Box<dyn Renderable + Send + Sync>);
+}
+
+pub(crate) mod systems {
+    pub(crate) mod render {
+        use std::sync::{Arc, RwLock};
+
+        use egui_winit::egui::{
+            self,
+            plot::{Bar, Plot},
+            FullOutput, TopBottomPanel,
+        };
+        use glam::Mat4;
+        use legion::{system, Resources, World};
+        use rivik_render::{
+            tracing::{display_traces, generate_chart},
+            Frame,
+        };
+        use rivik_scene::Node;
+        use tracing::debug_span;
+        use winit::window::Window;
+
+        use crate::{
+            components::{Geom, Light},
+            App,
+        };
+
+        #[system]
+        pub(crate) fn render(
+            #[resource] state: &mut egui_winit::State,
+            #[resource] ctx: &egui::Context,
+            #[resource] window: &Arc<Window>,
+            #[resource] output: &Option<FullOutput>,
+        ) {
+            let mut frame = Frame::new().unwrap();
+
+            // Render EGUI
+            let clipped_primitives;
+            if let Some(output) = output {
+                let ui_span = debug_span!("Drawing UI");
+                let ui_span = ui_span.enter();
+                state.handle_platform_output(&window, &ctx, output.platform_output.clone());
+                clipped_primitives = ctx.tessellate(output.shapes.clone());
+                frame.ui(&clipped_primitives, output.textures_delta.clone());
+                drop(ui_span);
+            }
+            frame.present();
+        }
+
+        #[tracing::instrument(skip_all)]
+        #[system]
+        pub(crate) fn setup_ui<A: App + 'static>(
+            #[resource] state: &mut egui_winit::State,
+            #[resource] ctx: &egui::Context,
+            #[resource] window: &Arc<Window>,
+            #[resource] app: &mut A,
+            #[resource] trace: &mut Option<(Vec<Bar>, Vec<Bar>)>,
+            #[resource] output: &mut Option<FullOutput>,
+        ) {
+            let trace_chart = generate_chart();
+            // draw ui
+            let input = state.take_egui_input(&window);
+            *output = Some(ctx.run(input, |ctx| {
+                let span = debug_span!("Drawing traces");
+                let _span = span.enter();
+                TopBottomPanel::bottom("Frame timing").show(ctx, |ui| {
+                    if trace.is_none() {
+                        if ui.button("Capture").clicked() {
+                            *trace = Some(trace_chart.clone());
+                        }
+                    } else if ui.button("Resume").clicked() {
+                        *trace = None;
+                    }
+                    let trace = trace.as_ref().unwrap_or(&trace_chart);
+
+                    Plot::new("Frame Timing")
+                        .data_aspect(0.1)
+                        .view_aspect(10.0)
+                        .show_axes([false, false])
+                        .show_background(false)
+                        .show(ui, |plot| {
+                            display_traces(plot, trace.0.clone(), trace.1.clone());
+                        });
+                });
+                let span = debug_span!("Drawing user UI");
+                let _span = span.enter();
+                app.ui(ctx)
+            }));
+        }
+    }
+}
+
 trait Renderable: Drawable + Spatial + Any {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
@@ -62,47 +159,46 @@ where
     }
 }
 
-enum RenderPassType {
-    Geom,
-    Light,
-    #[allow(dead_code)]
-    Filter,
-}
-
-pub struct Handle<T> {
-    inner: usize,
-    pass: RenderPassType,
-    ty: PhantomData<T>,
-}
-
-impl<T: Drawable + 'static> Handle<T> {
-    pub fn get<'a>(&self, ctx: &'a Context) -> &'a T {
-        match self.pass {
-            RenderPassType::Geom => ctx.geom[self.inner].0.as_any().downcast_ref().unwrap(),
-            _ => todo!(),
-        }
-    }
-
-    pub fn get_mut<'a>(&self, ctx: &'a mut Context) -> &'a mut T {
-        match self.pass {
-            RenderPassType::Geom => ctx.geom[self.inner].0.as_any_mut().downcast_mut().unwrap(),
-            _ => todo!(),
-        }
-    }
-
-    pub fn transform<'a>(&self, ctx: &'a Context) -> &'a Arc<RwLock<Node<Mat4>>> {
-        match self.pass {
-            RenderPassType::Geom => &ctx.geom[self.inner].1,
-            _ => todo!(),
-        }
-    }
-}
+// enum RenderPassType {
+//     Geom,
+//     Light,
+//     #[allow(dead_code)]
+//     Filter,
+// }
+//
+// pub struct Handle<T> {
+//     inner: usize,
+//     pass: RenderPassType,
+//     ty: PhantomData<T>,
+// }
+//
+// impl<T: Drawable + 'static> Handle<T> {
+//     pub fn get<'a>(&self, ctx: &'a Context) -> &'a T {
+//         match self.pass {
+//             RenderPassType::Geom => ctx.geom[self.inner].0.as_any().downcast_ref().unwrap(),
+//             _ => todo!(),
+//         }
+//     }
+//
+//     pub fn get_mut<'a>(&self, ctx: &'a mut Context) -> &'a mut T {
+//         match self.pass {
+//             RenderPassType::Geom => ctx.geom[self.inner].0.as_any_mut().downcast_mut().unwrap(),
+//             _ => todo!(),
+//         }
+//     }
+//
+//     pub fn transform<'a>(&self, ctx: &'a Context) -> &'a Arc<RwLock<Node<Mat4>>> {
+//         match self.pass {
+//             RenderPassType::Geom => &ctx.geom[self.inner].1,
+//             _ => todo!(),
+//         }
+//     }
+// }
 
 #[derive(Default)]
 pub struct Context {
-    root: Node<Mat4>,
-    geom: Vec<(Box<dyn Renderable>, Arc<RwLock<Node<Mat4>>>)>,
-    lights: Vec<(Box<dyn Renderable>, Arc<RwLock<Node<Mat4>>>)>,
+    world: World,
+    resources: Resources,
     pub camera: Mat4,
     pub fov: f32,
     pub near: f32,
@@ -114,70 +210,12 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn remove<T>(&mut self, handle: Handle<T>)
-    where
-        T: Drawable + Spatial + Any + 'static,
-    {
-        // unlink from drawing
-        match handle.pass {
-            RenderPassType::Geom => {
-                let (_, _node) = self.geom.remove(handle.inner);
-                // TODO: implement removing nodes from scenegraph
-            }
-            _ => todo!(),
-        }
+    pub fn world(&mut self) -> &mut World {
+        &mut self.world
     }
 
-    pub fn insert<T>(&mut self, bundle: T) -> Handle<T>
-    where
-        T: Drawable + Spatial + Any + 'static,
-    {
-        let node = self.root.insert(Mat4::default());
-        self.geom.push((Box::new(bundle), node.clone()));
-        Handle {
-            inner: self.geom.len() - 1,
-            pass: RenderPassType::Geom,
-            ty: PhantomData::default(),
-        }
-    }
-
-    pub fn insert_child<T>(&mut self, parent: &mut Node<Mat4>, bundle: T) -> Handle<T>
-    where
-        T: Drawable + Spatial + Any + 'static,
-    {
-        let node = parent.insert(Mat4::default());
-        self.geom.push((Box::new(bundle), node.clone()));
-        Handle {
-            inner: self.geom.len() - 1,
-            pass: RenderPassType::Geom,
-            ty: PhantomData::default(),
-        }
-    }
-
-    pub fn insert_child_light<T>(&mut self, parent: &mut Node<Mat4>, bundle: T) -> Handle<T>
-    where
-        T: Drawable + Spatial + Any + 'static,
-    {
-        let node = parent.insert(Mat4::default());
-        self.lights.push((Box::new(bundle), node.clone()));
-        Handle {
-            inner: self.lights.len() - 1,
-            pass: RenderPassType::Light,
-            ty: PhantomData::default(),
-        }
-    }
-
-    pub fn insert_light<T>(&mut self, bundle: T) -> Handle<T>
-    where
-        T: Drawable + Spatial + Any + 'static,
-    {
-        let node = self.root.insert(Mat4::default());
-        self.lights.push((Box::new(bundle), node.clone()));
-        Handle {
-            inner: self.lights.len() - 1,
-            pass: RenderPassType::Light,
-            ty: PhantomData::default(),
-        }
+    pub fn resources(&mut self) -> &mut Resources {
+        &mut self.resources
     }
 }
 
@@ -185,13 +223,15 @@ pub trait App {
     fn name() -> &'static str {
         "Rivik App"
     }
-    fn update(&mut self, _ctx: &mut Context) {}
+    fn update(&mut self, _ctx: &mut Context, _schedule: &mut Builder) {}
+
+    // Event will be handled differntly
     fn on_event(&mut self, _event: &WindowEvent) {}
     fn ui(&mut self, _ctx: &egui::Context) {}
     fn init(_ctx: &mut Context) -> Self;
 }
 
-pub fn run<A: App + 'static>() -> ! {
+pub fn run<A: App + Send + Sync + 'static>() -> ! {
     let event_loop = EventLoop::new();
     let window = Arc::new(
         WindowBuilder::new()
@@ -206,6 +246,7 @@ pub fn run<A: App + 'static>() -> ! {
     let egui_ctx = egui::Context::default();
 
     let mut scene = Context::default();
+    let mut render_resources = Resources::default();
 
     scene.camera = Mat4::look_at_rh(Vec3::new(2.0, 2.0, 0.0), Vec3::default(), Vec3::Y);
     scene.fov = FRAC_PI_2;
@@ -219,6 +260,19 @@ pub fn run<A: App + 'static>() -> ! {
     let mut last_frame_time = Instant::now();
 
     let mut proj = Mat4::perspective_rh(scene.fov, 16.0 / 9.0, scene.near, scene.far);
+
+    render_resources.insert(egui_winit::State::new(&event_loop));
+    render_resources.insert(egui::Context::default());
+    render_resources.insert(A::init(&mut scene));
+    render_resources.insert(Arc::clone(&window));
+
+    // build render schedule
+    let mut render_schedule = Schedule::builder()
+        .add_system(todo!("Update Transforms"))
+        .add_system(systems::render::setup_ui_system::<A>())
+        .flush()
+        .add_system(systems::render::render_system())
+        .build();
 
     // issue frame requests from another thread
     {
@@ -265,27 +319,28 @@ pub fn run<A: App + 'static>() -> ! {
                 let trace_chart = generate_chart();
 
                 {
-                    let span = debug_span!("Preparing Scenegraph");
-                    let _span = span.enter();
-                    for (drawable, transform) in &scene.geom {
-                        // update transform buffer
-                        drawable.transform().update(
-                            proj,
-                            scene.camera,
-                            transform.read().unwrap().global(),
-                        );
-                        frame.draw_geom(drawable.bundle());
-                    }
+                    println!("TODO: Draw scene");
+                    // let span = debug_span!("Preparing Scenegraph");
+                    // let _span = span.enter();
+                    // for (drawable, transform) in &scene.geom {
+                    //     // update transform buffer
+                    //     drawable.transform().update(
+                    //         proj,
+                    //         scene.camera,
+                    //         transform.read().unwrap().global(),
+                    //     );
+                    //     frame.draw_geom(drawable.bundle());
+                    // }
 
-                    for (light, transform) in &scene.lights {
-                        // update transform buffer
-                        light.transform().update(
-                            proj,
-                            scene.camera,
-                            transform.read().unwrap().global(),
-                        );
-                        frame.draw_light(light.bundle());
-                    }
+                    // for (light, transform) in &scene.lights {
+                    //     // update transform buffer
+                    //     light.transform().update(
+                    //         proj,
+                    //         scene.camera,
+                    //         transform.read().unwrap().global(),
+                    //     );
+                    //     frame.draw_light(light.bundle());
+                    // }
                 }
 
                 let ui_span = debug_span!("Drawing EGUI");
@@ -336,7 +391,12 @@ pub fn run<A: App + 'static>() -> ! {
                     let span = debug_span!("Updating scene", dt);
                     let _e = span.enter();
                     // update game logic
-                    app.update(&mut scene);
+
+                    let mut schedule = Schedule::builder();
+                    app.update(&mut scene, &mut schedule);
+                    let mut schedule = schedule.build();
+                    schedule.execute(&mut scene.world, &mut scene.resources);
+
                     dt -= scene.update_step;
                 }
             }

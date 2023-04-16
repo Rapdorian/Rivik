@@ -11,7 +11,6 @@ use rivik::{
 use rivik_render::tracing::UiSubscriber;
 use tracing::{dispatcher::set_global_default, Dispatch};
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, Registry};
-use winit::event::{ElementState, WindowEvent};
 
 #[derive(Default)]
 pub struct App {}
