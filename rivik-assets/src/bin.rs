@@ -1,3 +1,9 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public License,
+ * v. 2.0. If a copy of the MPL was not distributed with this file, You can
+ * obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
 //! A binary container format for storing arbitrary buffers
 //!
 //! The format consists of a series of chunks that contain 32bit type indicator and a binary

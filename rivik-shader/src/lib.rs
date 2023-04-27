@@ -1,3 +1,9 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public License,
+ * v. 2.0. If a copy of the MPL was not distributed with this file, You can
+ * obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
 macro_rules! impl_op {
     ($op:ident, $method:ident, $fmt:literal, $prim:ident, f32, $out:ident) => {
         impl std::ops::$op<f32> for $prim {
