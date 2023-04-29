@@ -43,6 +43,8 @@ impl Format for Img {
             .context(CreationSnafu)?
             .read_to_end(&mut buf)
             .context(ReadSnafu)?;
-        Ok(Reader::new(Cursor::new(buf)).decode().context(ImageSnafu)?)
+        Ok(Reader::with_format(Cursor::new(buf), self.0)
+            .decode()
+            .context(ImageSnafu)?)
     }
 }
