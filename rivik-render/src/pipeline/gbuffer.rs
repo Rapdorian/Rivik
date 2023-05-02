@@ -26,6 +26,7 @@ pub struct GBuffer {
     pub(crate) depth_view: TextureView,
     pub(crate) hdr_view: TextureView,
     pub(crate) bind_group: BindGroup,
+    pub(crate) hdr_bind: BindGroup,
     pub(crate) layout: BindGroupLayout,
 }
 
@@ -146,7 +147,45 @@ impl GBuffer {
                 },
             ],
         });
+
+        let hdr_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("HDR Bind group layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: BindingType::Sampler(SamplerBindingType::NonFiltering),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: BindingType::Texture {
+                        multisampled: false,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                    },
+                    count: None,
+                },
+            ],
+        });
+
+        let hdr_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("GBuffer HDR binding"),
+            layout: &hdr_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&hdr_view),
+                },
+            ],
+        });
         Self {
+            hdr_bind,
             bind_group,
             layout,
             color_view,
@@ -294,11 +333,15 @@ impl GBuffer {
         })
     }
 
-    pub(crate) fn rpass<'a>(
-        &'a self,
-        encoder: &'a mut CommandEncoder,
+    pub(crate) fn rpass<'buffer, 'frame>(
+        &'buffer self,
+        label: Option<&'frame str>,
+        encoder: &'frame mut CommandEncoder,
         clear: Option<wgpu::Color>,
-    ) -> RenderPass<'a> {
+    ) -> RenderPass<'frame>
+    where
+        'buffer: 'frame,
+    {
         let load = if let Some(color) = clear {
             LoadOp::Clear(color)
         } else {
@@ -306,7 +349,7 @@ impl GBuffer {
         };
 
         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("GBuffer Render pass"),
+            label,
             color_attachments: &[
                 Some(RenderPassColorAttachment {
                     view: &self.color_view,

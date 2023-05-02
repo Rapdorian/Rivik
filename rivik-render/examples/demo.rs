@@ -12,10 +12,12 @@ use image::ImageFormat;
 use pollster::block_on;
 use rivik_render::{
     context::{resize, surface_config},
-    draw::{self, pixel_mesh, Mesh, PixelMesh},
-    filters::display::DisplayFilter,
-    lights::{ambient::AmbientLight, sun::SunLight},
+    draw::{self, Mesh},
+    filters::DisplayFilter,
+    jobs::deferred::{Deferred, LightPass},
+    lights::{AmbientLight, SunLight},
     load::{GpuMesh, GpuTexture},
+    render_job::RenderJob,
     tracing::{display_traces, generate_chart, UiSubscriber},
     transform::Spatial,
     Frame, Transform,
@@ -94,6 +96,8 @@ async fn run() -> Result<(), Whatever> {
         });
     }
 
+    let pipeline = Deferred::default();
+
     event_loop.run(move |event, _, control_flow| {
         let span = debug_span!("Event Callback", ?event);
         let _e = span.enter();
@@ -156,6 +160,8 @@ async fn run() -> Result<(), Whatever> {
                     frame.draw_light(&ambient);
                     frame.draw_filter(&display);
                 }
+
+                pipeline.run(&mut frame);
 
                 let span = debug_span!("Handle egui");
                 let ui_span = span.enter();

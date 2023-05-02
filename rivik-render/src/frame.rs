@@ -8,13 +8,13 @@ use std::borrow::Borrow;
 
 use egui::{ClippedPrimitive, TexturesDelta};
 use snafu::{Backtrace, ResultExt, Snafu};
-use tracing::{debug, debug_span, instrument};
-use wgpu::{Color, CommandEncoder, RenderBundle, SurfaceError, SurfaceTexture, TextureView};
-
-use crate::{
-    context::{device, egui_render, gbuffer, queue, surface, surface_config},
-    filters::DisplayFilter,
+use tracing::{debug, instrument};
+use wgpu::{
+    CommandEncoder, RenderBundle, RenderPass, RenderPassDescriptor, SurfaceError, SurfaceTexture,
+    TextureView,
 };
+
+use crate::context::{device, queue, surface};
 
 /// An error constructing a frame
 #[derive(Debug, Snafu)]
@@ -25,6 +25,8 @@ pub struct FrameError {
 }
 
 /// Handle's requesting and drawing to a frame
+///
+/// Provides access to queueing render passes
 #[derive(Debug)]
 pub struct Frame<'a> {
     pub(crate) frame: SurfaceTexture,
@@ -56,124 +58,133 @@ impl<'a> Frame<'a> {
     #[instrument(skip(self))]
     pub fn present(mut self) {
         // TODO: Handle camera transform setup
-        {
-            let geom_span = debug_span!("Geometry render pass");
-            let _e = geom_span.enter();
-            let mut rpass = gbuffer().rpass(&mut self.encoder, Some(Color::BLACK));
-            rpass.execute_bundles(self.geom);
-        }
+        // {
+        //     let geom_span = debug_span!("Geometry render pass");
+        //     let _e = geom_span.enter();
+        //     let mut rpass = gbuffer().rpass(
+        //         Some("Gbuffer Render Pass"),
+        //         &mut self.encoder,
+        //         Some(Color::BLACK),
+        //     );
+        //     rpass.execute_bundles(self.geom);
+        // }
 
-        {
-            let span = debug_span!("Lighting render pass");
-            let _e = span.enter();
-            let mut rpass = self.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Lighting"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &gbuffer().hdr_view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: true,
-                    },
-                })],
-                depth_stencil_attachment: None,
-            });
+        // {
+        //     let span = debug_span!("Lighting render pass");
+        //     let _e = span.enter();
+        //     let mut rpass = self.encoder.begin_render_pass(&RenderPassDescriptor {
+        //         label: Some("Lighting"),
+        //         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+        //             view: &gbuffer().hdr_view,
+        //             resolve_target: None,
+        //             ops: wgpu::Operations {
+        //                 load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+        //                 store: true,
+        //             },
+        //         })],
+        //         depth_stencil_attachment: None,
+        //     });
 
-            rpass.execute_bundles(self.lights);
-        }
+        //     rpass.execute_bundles(self.lights);
+        // }
 
-        {
-            let span = debug_span!("Filter render pass");
-            let _e = span.enter();
-            // really ugly way of generating a default list of filters but only creating them if there
-            // is an empty filter list.
-            //
-            // This is ugly because we are regenerating the list every frame.
-            // TODO: this should probably be recorded once and statically cached
-            let display = if self.filters.is_empty() {
-                Some(DisplayFilter::default())
-            } else {
-                None
-            };
+        // {
+        //     let span = tracing::debug_span!("Filter render pass");
+        //     let _e = span.enter();
+        //     // really ugly way of generating a default list of filters but only creating them if there
+        //     // is an empty filter list.
+        //     //
+        //     // This is ugly because we are regenerating the list every frame.
+        //     // TODO: this should probably be recorded once and statically cached
+        //     let display = if self.filters.is_empty() {
+        //         Some(crate::filters::DisplayFilter::default())
+        //     } else {
+        //         None
+        //     };
 
-            let filters = if !self.filters.is_empty() {
-                self.filters
-            } else {
-                vec![display.as_ref().unwrap().bundle()]
-            };
+        //     let filters = if !self.filters.is_empty() {
+        //         self.filters
+        //     } else {
+        //         vec![display.as_ref().unwrap().bundle()]
+        //     };
 
-            {
-                let mut rpass = self.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Filters"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &self.frame_view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                            store: true,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                });
+        //     {
+        //         let mut rpass = self.encoder.begin_render_pass(&RenderPassDescriptor {
+        //             label: Some("Filters"),
+        //             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+        //                 view: &self.frame_view,
+        //                 resolve_target: None,
+        //                 ops: wgpu::Operations {
+        //                     load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+        //                     store: true,
+        //                 },
+        //             })],
+        //             depth_stencil_attachment: None,
+        //         });
 
-                rpass.execute_bundles(filters);
-            }
-        }
+        //         rpass.execute_bundles(filters);
+        //     }
+        // }
 
-        // render UI pass
-        if let Some((clipped_primitives, textures_delta)) = self.ui {
-            let span = debug_span!("Render UI");
-            let _e = span.enter();
-            let mut renderer = egui_render().write().unwrap();
-            // update textures
-            for (id, image) in textures_delta.set {
-                renderer.update_texture(device(), queue(), id, &image);
-            }
+        // // render UI pass
+        // if let Some((clipped_primitives, textures_delta)) = self.ui {
+        //     let span = debug_span!("Render UI");
+        //     let _e = span.enter();
+        //     let mut renderer = egui_render().write().unwrap();
+        //     // update textures
+        //     for (id, image) in textures_delta.set {
+        //         renderer.update_texture(device(), queue(), id, &image);
+        //     }
 
-            let screen_descriptor = {
-                let config = surface_config().read().unwrap();
-                egui_wgpu::renderer::ScreenDescriptor {
-                    size_in_pixels: [config.width, config.height],
-                    pixels_per_point: 1.0,
-                }
-            };
+        //     let screen_descriptor = {
+        //         let config = surface_config().read().unwrap();
+        //         egui_wgpu::renderer::ScreenDescriptor {
+        //             size_in_pixels: [config.width, config.height],
+        //             pixels_per_point: 1.0,
+        //         }
+        //     };
 
-            let _ = renderer.update_buffers(
-                device(),
-                queue(),
-                &mut self.encoder,
-                &clipped_primitives,
-                &screen_descriptor,
-            );
+        //     let _ = renderer.update_buffers(
+        //         device(),
+        //         queue(),
+        //         &mut self.encoder,
+        //         &clipped_primitives,
+        //         &screen_descriptor,
+        //     );
 
-            {
-                let mut rpass = self.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &self.frame_view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: true,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                    label: Some("egui_render"),
-                });
+        //     {
+        //         let mut rpass = self.encoder.begin_render_pass(&RenderPassDescriptor {
+        //             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+        //                 view: &self.frame_view,
+        //                 resolve_target: None,
+        //                 ops: wgpu::Operations {
+        //                     load: wgpu::LoadOp::Load,
+        //                     store: true,
+        //                 },
+        //             })],
+        //             depth_stencil_attachment: None,
+        //             label: Some("egui_render"),
+        //         });
 
-                renderer.render(&mut rpass, &clipped_primitives, &screen_descriptor);
-            }
+        //         renderer.render(&mut rpass, &clipped_primitives, &screen_descriptor);
+        //     }
 
-            for id in textures_delta.free {
-                renderer.free_texture(&id);
-            }
-        }
+        //     for id in textures_delta.free {
+        //         renderer.free_texture(&id);
+        //     }
+        // }
 
-        let span = debug_span!("GPU time");
-        let _e = span.enter();
+        // let span = debug_span!("GPU time");
+        // let _e = span.enter();
 
         let _ = queue().submit(Some(self.encoder.finish()));
         debug!("Presenting Frame");
         self.frame.present();
+    }
+
+    /// Create a render pass inside this frame
+    pub fn render_pass(&'a mut self, desc: RenderPassDescriptor<'a, 'a>) -> RenderPass<'a> {
+        self.encoder.begin_render_pass(&desc)
     }
 
     /// Try to fetch a new frame

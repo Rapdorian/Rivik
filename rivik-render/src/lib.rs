@@ -19,6 +19,7 @@ mod frame;
 pub mod tracing;
 pub mod transform;
 pub use transform::Transform;
+pub mod render_job;
 
 /// Contains asset loader functions for fetching GPU assets from disk formats
 pub mod load {
@@ -54,6 +55,11 @@ pub mod lights {
 
     pub use ambient::AmbientLight;
     pub use sun::SunLight;
+}
+
+/// Programmable render pipeline
+pub mod jobs {
+    pub mod deferred;
 }
 
 /// Types related to the render pipeline
