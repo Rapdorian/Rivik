@@ -1,0 +1,165 @@
+use std::{
+    mem::{self, ManuallyDrop},
+    num::NonZeroU64,
+};
+
+use glam::Mat4;
+use mint::{Quaternion, Vector3};
+use snafu::{Backtrace, ResultExt, Snafu};
+use types::{
+    egui::{ClippedPrimitive, TexturesDelta},
+    light::Light,
+    Model,
+};
+use wgpu::{
+    util::{BufferInitDescriptor, DeviceExt},
+    SurfaceError,
+};
+
+use crate::{
+    context::{device, queue, surface},
+    gbuffer,
+    inputs::{material, transform},
+    pipes::mesh::MESH_PIPE,
+    types,
+};
+
+/// An error constructing a frame
+#[derive(Debug, Snafu)]
+#[snafu(display("Failed to create the next frame"))]
+pub struct FrameError {
+    source: SurfaceError,
+    backtrace: Backtrace,
+}
+
+pub struct Frame<'a> {
+    vertex_buffers: &'a [wgpu::Buffer],
+    index_buffers: &'a [(wgpu::Buffer, usize)],
+    textures: &'a [(wgpu::Texture, wgpu::TextureView)],
+
+    // Store render info
+    meshes: Vec<(Model<u32>, Mat4)>,
+    lights: Vec<Light>,
+    camera: Mat4,
+}
+
+impl<'a> Frame<'a> {
+    /// Try to fetch a new frame
+    /// The frame will be rendered and presented when this object is dropped
+    pub fn new(
+        vertex_buffers: &'a [wgpu::Buffer],
+        index_buffers: &'a [(wgpu::Buffer, usize)],
+        textures: &'a [(wgpu::Texture, wgpu::TextureView)],
+    ) -> Result<Frame<'a>, FrameError> {
+        //TODO: We might be able to delay fetching the frame texture until the actually drawing
+
+        Ok(Frame {
+            // pre allocate a bunch of space for storing meshes
+            meshes: Vec::with_capacity(100),
+            lights: Vec::with_capacity(100),
+            camera: Mat4::default(),
+            vertex_buffers,
+            index_buffers,
+            textures,
+        })
+    }
+}
+
+impl<'a> Drop for Frame<'a> {
+    fn drop(&mut self) {
+        // Apply the render pipeline here
+
+        // generate uniform data for rendering meshes
+        let mut buffer = Vec::with_capacity(self.meshes.len() * mem::size_of::<Mat4>());
+        for mesh in self.meshes {
+            // push transform into buffer
+            let transform = bytemuck::bytes_of(&mesh.1);
+            buffer.extend_from_slice(transform);
+        }
+
+        // create a buffer for storing Uniforms
+        let ubo = device().create_buffer_init(&BufferInitDescriptor {
+            label: None,
+            contents: &buffer,
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
+        let ubo = device().create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &*transform::LAYOUT,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &ubo,
+                    offset: 0,
+                    size: NonZeroU64::new(mem::size_of::<Mat4>() as u64),
+                }),
+            }],
+        });
+
+        // get next frame
+        let frame = surface().get_current_texture().context(FrameSnafu)?;
+        let frame_view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        let encoder =
+            device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+        // create render pass for drawing to GBuffer
+        {
+            let rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Geometry pass"),
+                color_attachments: gbuffer::color_attachments(Some(wgpu::Color::BLACK)),
+                depth_stencil_attachment: Some(gbuffer::depth_attachment(true)),
+            });
+
+            // draw meshes
+            rpass.set_pipeline(&*MESH_PIPE);
+
+            for (i, (mesh, _)) in self.meshes.iter().enumerate() {
+                // issue draw commands for a mesh
+                rpass.set_bind_group(0, &ubo, &[(mem::size_of::<Mat4>() * i) as u32]);
+                rpass.set_bind_group(0, &material::bind(self.textures, *mesh), &[]);
+                rpass.set_vertex_buffer(0, self.vertex_buffers[mesh.mesh as usize].slice(..));
+                let (idx_buffer, idx_len) = self.index_buffers[mesh.mesh as usize];
+                rpass.set_index_buffer(idx_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                rpass.draw_indexed(0..idx_len as u32, 0, 0..1);
+            }
+        }
+        // draw lights
+
+        let _ = queue().submit(Some(encoder.finish()));
+        frame.present();
+    }
+}
+
+impl<'a> types::Frame for Frame<'a> {
+    type ID = u32;
+
+    fn draw_mesh(
+        &mut self,
+        model: types::Model<Self::ID>,
+        pos: impl Into<Vector3<f32>>,
+        rot: impl Into<Quaternion<f32>>,
+        scale: impl Into<Vector3<f32>>,
+    ) {
+        // create transform
+        let mat = Mat4::from_scale_rotation_translation(
+            scale.into().into(),
+            rot.into().into(),
+            scale.into().into(),
+        );
+        self.meshes.push((model, mat));
+    }
+
+    fn draw_light(&mut self, light: types::light::Light) {
+        self.lights.push(light);
+    }
+
+    fn set_camera(&mut self, pos: impl Into<Vector3<f32>>, rot: impl Into<Quaternion<f32>>) {
+        self.camera = Mat4::from_rotation_translation(rot.into().into(), pos.into().into());
+    }
+
+    fn set_ui<'b>(&'a mut self, clip_prim: &'b [ClippedPrimitive], textures: TexturesDelta) {
+        todo!("egui rendering")
+    }
+}

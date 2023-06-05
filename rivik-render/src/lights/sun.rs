@@ -4,8 +4,7 @@
  * obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-use std::borrow::Borrow;
-
+use glam::Vec3A;
 use mint::Vector3;
 use ultraviolet::Vec3;
 use wgpu::{
@@ -16,6 +15,8 @@ use wgpu::{
 
 use crate::{
     context::{device, gbuffer, queue},
+    draw::Bundle,
+    jobs::frustum_cull::AABB,
     pipeline::{sun, GBuffer},
     transform::{self, Spatial},
     Transform,
@@ -23,7 +24,6 @@ use crate::{
 
 /// A Directional light that can be rendered to a frame
 pub struct SunLight {
-    bundle: RenderBundle,
     buffer: Buffer,
     transform: Transform,
 }
@@ -31,6 +31,13 @@ pub struct SunLight {
 impl Spatial for SunLight {
     fn transform(&self) -> &Transform {
         &self.transform
+    }
+
+    fn bound(&self) -> AABB {
+        let mut aabb = AABB::default();
+        aabb.min(Vec3A::splat(f32::NEG_INFINITY));
+        aabb.max(Vec3A::splat(f32::INFINITY));
+        aabb
     }
 }
 
@@ -54,58 +61,9 @@ impl SunLight {
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
-        // create render bundle for this light
-        let gbuffer = gbuffer();
-
-        let mut bundle = device.create_render_bundle_encoder(&RenderBundleEncoderDescriptor {
-            label: None,
-            color_formats: &[Some(GBuffer::hdr_format())],
-            depth_stencil: None,
-            sample_count: 1,
-            multiview: None,
-        });
-
-        let uniform_buffer = device.create_bind_group(&BindGroupDescriptor {
-            label: None,
-            layout: sun::layout(),
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &buffer,
-                    offset: 0,
-                    size: None,
-                }),
-            }],
-        });
-
         let transform = Transform::default();
 
-        let t_group = device.create_bind_group(&BindGroupDescriptor {
-            label: None,
-            layout: transform::layout(),
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: BindingResource::Buffer(BufferBinding {
-                    buffer: transform.buffer(),
-                    offset: 0,
-                    size: None,
-                }),
-            }],
-        });
-
-        // record draw commands to render bundle
-        bundle.set_pipeline(sun::pipeline());
-        bundle.set_bind_group(0, &gbuffer.bind_group, &[]);
-        bundle.set_bind_group(1, &uniform_buffer, &[]);
-        bundle.set_bind_group(2, &t_group, &[]);
-        bundle.draw(0..7, 0..1);
-
-        let bundle = bundle.finish(&RenderBundleDescriptor { label: None });
-        Self {
-            buffer,
-            transform,
-            bundle,
-        }
+        Self { buffer, transform }
     }
 
     /// Set the direction of this sun light
@@ -119,8 +77,49 @@ impl SunLight {
     }
 }
 
-impl Borrow<RenderBundle> for SunLight {
-    fn borrow(&self) -> &RenderBundle {
-        &self.bundle
+impl Bundle for SunLight {
+    fn bundle(&self) -> RenderBundle {
+        let mut bundle = device().create_render_bundle_encoder(&RenderBundleEncoderDescriptor {
+            label: None,
+            color_formats: &[Some(GBuffer::hdr_format())],
+            depth_stencil: None,
+            sample_count: 1,
+            multiview: None,
+        });
+
+        let t_group = device().create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: transform::layout(),
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::Buffer(BufferBinding {
+                    buffer: self.transform.buffer(),
+                    offset: 0,
+                    size: None,
+                }),
+            }],
+        });
+
+        let uniform_buffer = device().create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: sun::layout(),
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::Buffer(BufferBinding {
+                    buffer: &self.buffer,
+                    offset: 0,
+                    size: None,
+                }),
+            }],
+        });
+
+        // record draw commands to render bundle
+        bundle.set_pipeline(sun::pipeline());
+        bundle.set_bind_group(0, &gbuffer().bind_group, &[]);
+        bundle.set_bind_group(1, &uniform_buffer, &[]);
+        bundle.set_bind_group(2, &t_group, &[]);
+        bundle.draw(0..7, 0..1);
+
+        bundle.finish(&RenderBundleDescriptor { label: None })
     }
 }

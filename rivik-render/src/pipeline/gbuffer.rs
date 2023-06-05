@@ -7,14 +7,14 @@
 //! Utilities for working with the G-buffer
 use std::borrow::Cow;
 
-use crate::context::device;
+use crate::{context::device, sampler};
 use wgpu::{
     BindGroup, BindGroupLayout, BindGroupLayoutDescriptor, BindingType, BlendState,
     ColorTargetState, ColorWrites, CommandEncoder, DepthStencilState, Extent3d, LoadOp,
     RenderBundleDepthStencil, RenderPass, RenderPassColorAttachment,
-    RenderPassDepthStencilAttachment, RenderPipeline, SamplerBindingType, SamplerDescriptor,
-    TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView,
-    TextureViewDescriptor, VertexBufferLayout,
+    RenderPassDepthStencilAttachment, RenderPipeline, SamplerBindingType, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
+    VertexBufferLayout,
 };
 
 /// The G-buffer
@@ -119,7 +119,6 @@ impl GBuffer {
         let lum_view = lum_tex.create_view(&TextureViewDescriptor::default());
         let hdr_view = hdr_tex.create_view(&TextureViewDescriptor::default());
         let depth_view = depth_tex.create_view(&TextureViewDescriptor::default());
-        let sampler = device.create_sampler(&SamplerDescriptor::default());
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("GBuffer"),
@@ -127,7 +126,7 @@ impl GBuffer {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
+                    resource: wgpu::BindingResource::Sampler(&sampler::DEFAULT),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -176,7 +175,7 @@ impl GBuffer {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
+                    resource: wgpu::BindingResource::Sampler(&sampler::DEFAULT),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,

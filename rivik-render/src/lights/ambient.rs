@@ -4,14 +4,15 @@
  * obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-use std::borrow::Borrow;
-
 use crate::{
     context::{device, gbuffer, queue},
+    draw::Bundle,
+    jobs::frustum_cull::AABB,
     pipeline::{ambient, GBuffer},
     transform::Spatial,
     Transform,
 };
+use glam::Vec3A;
 use ultraviolet::Vec4;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
@@ -21,7 +22,6 @@ use wgpu::{
 
 /// Convienience object for handling the uniform buffer of an ambient light
 pub struct AmbientLight {
-    bundle: RenderBundle,
     buffer: Buffer,
     transform: Transform,
 }
@@ -29,6 +29,13 @@ pub struct AmbientLight {
 impl Spatial for AmbientLight {
     fn transform(&self) -> &Transform {
         &self.transform
+    }
+
+    fn bound(&self) -> AABB {
+        let mut aabb = AABB::default();
+        aabb.min(Vec3A::splat(f32::NEG_INFINITY));
+        aabb.max(Vec3A::splat(f32::INFINITY));
+        aabb
     }
 }
 
@@ -42,9 +49,7 @@ impl AmbientLight {
             contents: Vec4::new(r, g, b, 1.0).as_byte_slice(),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
-        let bundle = ambient_light(&buffer);
         Self {
-            bundle,
             buffer,
             transform: Transform::default(),
         }
@@ -56,9 +61,9 @@ impl AmbientLight {
     }
 }
 
-impl Borrow<RenderBundle> for AmbientLight {
-    fn borrow(&self) -> &RenderBundle {
-        &self.bundle
+impl Bundle for AmbientLight {
+    fn bundle(&self) -> RenderBundle {
+        ambient_light(&self.buffer)
     }
 }
 

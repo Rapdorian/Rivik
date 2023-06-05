@@ -5,40 +5,37 @@
  */
 
 //! Utilities for rendering a pixelated mesh
-use std::{borrow::Borrow, rc::Rc, sync::Arc};
+use std::{rc::Rc, sync::Arc};
 
 use assets::formats::mesh::{Mesh, Vert};
 use wgpu::{
-    AddressMode, BindingResource, FilterMode, RenderBundle, RenderBundleDescriptor,
-    RenderBundleEncoderDescriptor, Texture, TextureView,
+    RenderBundle, RenderBundleDescriptor, RenderBundleEncoderDescriptor, Texture, TextureView,
 };
 
 use crate::{
     context::device,
+    jobs::frustum_cull::AABB,
     load::CountedBuffer,
     pipeline::{simple, GBuffer, Vertex3D},
-    transform::{self, Spatial},
+    transform::Spatial,
     Transform,
 };
 
-/// I need to create a wrapper type around RenderBundle that also holds references to it's GPU assets
-///
-/// TODO: Deep dive on when things are freed and how to minimally ensure asset lifetimes
-pub struct PixelMesh {
-    bundle: RenderBundle,
-    transform: Transform,
-}
+use super::Bundle;
+
+/// Renderable that draws a pixelated mesh
+pub struct PixelMesh(super::Mesh);
 
 impl PixelMesh {
     /// Create a new renderable from a group of assets
-    pub fn new(
-        mesh: Rc<Arc<CountedBuffer>>,
-        transform: Transform,
-        tex: Rc<Arc<(Texture, TextureView)>>,
-    ) -> Self {
-        // create render bundle for this asset
-        let device = device();
-        let mut bundle = device.create_render_bundle_encoder(&RenderBundleEncoderDescriptor {
+    pub fn new(mesh: Rc<Arc<CountedBuffer>>, tex: Rc<Arc<(Texture, TextureView)>>) -> Self {
+        Self(super::Mesh::new(mesh, tex))
+    }
+}
+
+impl Bundle for PixelMesh {
+    fn bundle(&self) -> RenderBundle {
+        let mut bundle = device().create_render_bundle_encoder(&RenderBundleEncoderDescriptor {
             label: None,
             color_formats: GBuffer::color_formats(),
             depth_stencil: GBuffer::depth_format(),
@@ -46,61 +43,23 @@ impl PixelMesh {
             multiview: None,
         });
 
-        // create bind group for uniform buffer
-        let uniform = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: transform::layout(),
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: transform.buffer().as_entire_binding(),
-            }],
-            label: None,
-        });
-
-        // create texture bind group
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            mag_filter: FilterMode::Nearest,
-            min_filter: FilterMode::Nearest,
-            mipmap_filter: FilterMode::Nearest,
-            address_mode_u: AddressMode::Repeat,
-            address_mode_v: AddressMode::Repeat,
-            ..Default::default()
-        });
-
-        let texture_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &*simple::TEX_LAYOUT,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::Sampler(&sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::TextureView(&tex.1),
-                },
-            ],
-        });
-
         // start recording render commands
         bundle.set_pipeline(&*simple::PIPELINE);
-        bundle.set_bind_group(0, &texture_group, &[]);
-        bundle.set_bind_group(1, &uniform, &[]);
-        bundle.set_vertex_buffer(0, mesh.slice(..));
-        bundle.draw(0..mesh.len(), 0..1);
-        let bundle = bundle.finish(&RenderBundleDescriptor { label: None });
-        Self { bundle, transform }
-    }
-}
-
-impl Borrow<RenderBundle> for PixelMesh {
-    fn borrow(&self) -> &RenderBundle {
-        &self.bundle
+        bundle.set_bind_group(0, &self.0.tex_grp, &[]);
+        bundle.set_bind_group(1, &self.0.transform_binding, &[]);
+        bundle.set_vertex_buffer(0, self.0.mesh.slice(..));
+        bundle.draw(0..self.0.mesh.len(), 0..1);
+        bundle.finish(&RenderBundleDescriptor { label: None })
     }
 }
 
 impl Spatial for PixelMesh {
     fn transform(&self) -> &Transform {
-        &self.transform
+        self.0.transform()
+    }
+
+    fn bound(&self) -> AABB {
+        todo!()
     }
 }
 

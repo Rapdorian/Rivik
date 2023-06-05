@@ -17,7 +17,7 @@ use wgpu::{
     Buffer, BufferUsages,
 };
 
-use crate::context::device;
+use crate::{context::device, jobs::frustum_cull::AABB};
 
 /// Import format for a Mesh
 ///
@@ -26,13 +26,13 @@ pub struct GpuMesh<F, V>(pub F, pub V)
 where
     F: Format<Output = Mesh<f32>> + Send + Sync,
     F::Error: FormatError + Send + Sync,
-    V: Fn(&Mesh<f32>) -> (Vec<u8>, usize);
+    V: Fn(&Mesh<f32>) -> (Vec<u8>, usize, AABB);
 
 impl<F, V> Format for GpuMesh<F, V>
 where
     F: Format<Output = Mesh<f32>> + Clone + 'static + Send + Sync,
     F::Error: FormatError + Send + Sync,
-    V: Fn(&Mesh<f32>) -> (Vec<u8>, usize),
+    V: Fn(&Mesh<f32>) -> (Vec<u8>, usize, AABB),
 {
     type Output = CountedBuffer;
     type Error = AssetLoadError;
@@ -42,7 +42,7 @@ where
         let asset = load(path.to_string(), self.0.clone())?;
         println!("Fetching asset: {path}");
 
-        let (buffer, len) = (self.1)(&asset);
+        let (buffer, len, aabb) = (self.1)(&asset);
 
         // upload buffer to GPU
         Ok(CountedBuffer::new(
@@ -52,6 +52,7 @@ where
                 usage: BufferUsages::VERTEX,
             }),
             len as u32,
+            aabb,
         ))
     }
 }
@@ -60,18 +61,28 @@ where
 pub struct CountedBuffer {
     len: u32,
     buffer: Buffer,
+    aabb: AABB,
 }
 
 impl CountedBuffer {
     /// Creates a new `CountedBuffer`
-    pub fn new(buf: Buffer, len: u32) -> Self {
-        Self { len, buffer: buf }
+    pub fn new(buf: Buffer, len: u32, aabb: AABB) -> Self {
+        Self {
+            len,
+            buffer: buf,
+            aabb,
+        }
     }
 
     /// Get the length of this buffer
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> u32 {
         self.len
+    }
+
+    /// Gets an axis-aligned bounding box for this mesh
+    pub fn bounds(&self) -> AABB {
+        self.aabb
     }
 }
 

@@ -12,7 +12,7 @@ use image::ImageFormat;
 use pollster::block_on;
 use rivik_render::{
     context::{resize, surface_config},
-    draw::{self, Mesh},
+    draw::{self, pixel_mesh::vertex_buffer, Bundle, PixelMesh as Mesh},
     filters::DisplayFilter,
     jobs::deferred::{Deferred, LightPass},
     lights::{AmbientLight, SunLight},
@@ -46,7 +46,7 @@ async fn run() -> Result<(), Whatever> {
     // load a mesh
     let mesh = load(
         "file:assets/fighter_smooth.obj",
-        GpuMesh(ObjMesh, draw::mesh::vertex_buffer),
+        GpuMesh(ObjMesh, vertex_buffer),
     )
     .whatever_context("Failed to fetch fighter ship")?;
     let tex = load(
@@ -96,7 +96,10 @@ async fn run() -> Result<(), Whatever> {
         });
     }
 
-    let pipeline = Deferred::default();
+    let mut pipeline = Deferred::default();
+    pipeline.push_geom(mesh_bundle.bundle());
+    pipeline.push_light(ambient.bundle());
+    pipeline.push_light(sun.bundle());
 
     event_loop.run(move |event, _, control_flow| {
         let span = debug_span!("Event Callback", ?event);
@@ -151,16 +154,6 @@ async fn run() -> Result<(), Whatever> {
                 mesh_bundle.transform().update(proj, view, model);
                 sun.transform().update(proj, view, model);
                 mem::drop(span);
-
-                {
-                    let span = debug_span!("Build frame");
-                    let _e = span.enter();
-                    frame.draw_geom(&mesh_bundle);
-                    frame.draw_light(&sun);
-                    frame.draw_light(&ambient);
-                    frame.draw_filter(&display);
-                }
-
                 pipeline.run(&mut frame);
 
                 let span = debug_span!("Handle egui");

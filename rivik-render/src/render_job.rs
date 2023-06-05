@@ -32,3 +32,8 @@ pub trait RenderJob {
         self.render(&mut rpass);
     }
 }
+
+/// Generic Render pass object intended to be used internally to create render passes
+pub trait RenderPass<'r> {
+    fn begin(frame: &'r mut Frame) -> Self;
+}

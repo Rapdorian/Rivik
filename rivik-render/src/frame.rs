@@ -32,9 +32,6 @@ pub struct Frame<'a> {
     pub(crate) frame: SurfaceTexture,
     pub(crate) frame_view: TextureView,
     pub(crate) encoder: CommandEncoder,
-    geom: Vec<&'a RenderBundle>,
-    lights: Vec<&'a RenderBundle>,
-    filters: Vec<&'a RenderBundle>,
     ui: Option<(&'a [ClippedPrimitive], TexturesDelta)>,
 }
 
@@ -56,127 +53,7 @@ where
 impl<'a> Frame<'a> {
     /// Finalize this frame and draw it to screen
     #[instrument(skip(self))]
-    pub fn present(mut self) {
-        // TODO: Handle camera transform setup
-        // {
-        //     let geom_span = debug_span!("Geometry render pass");
-        //     let _e = geom_span.enter();
-        //     let mut rpass = gbuffer().rpass(
-        //         Some("Gbuffer Render Pass"),
-        //         &mut self.encoder,
-        //         Some(Color::BLACK),
-        //     );
-        //     rpass.execute_bundles(self.geom);
-        // }
-
-        // {
-        //     let span = debug_span!("Lighting render pass");
-        //     let _e = span.enter();
-        //     let mut rpass = self.encoder.begin_render_pass(&RenderPassDescriptor {
-        //         label: Some("Lighting"),
-        //         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-        //             view: &gbuffer().hdr_view,
-        //             resolve_target: None,
-        //             ops: wgpu::Operations {
-        //                 load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-        //                 store: true,
-        //             },
-        //         })],
-        //         depth_stencil_attachment: None,
-        //     });
-
-        //     rpass.execute_bundles(self.lights);
-        // }
-
-        // {
-        //     let span = tracing::debug_span!("Filter render pass");
-        //     let _e = span.enter();
-        //     // really ugly way of generating a default list of filters but only creating them if there
-        //     // is an empty filter list.
-        //     //
-        //     // This is ugly because we are regenerating the list every frame.
-        //     // TODO: this should probably be recorded once and statically cached
-        //     let display = if self.filters.is_empty() {
-        //         Some(crate::filters::DisplayFilter::default())
-        //     } else {
-        //         None
-        //     };
-
-        //     let filters = if !self.filters.is_empty() {
-        //         self.filters
-        //     } else {
-        //         vec![display.as_ref().unwrap().bundle()]
-        //     };
-
-        //     {
-        //         let mut rpass = self.encoder.begin_render_pass(&RenderPassDescriptor {
-        //             label: Some("Filters"),
-        //             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-        //                 view: &self.frame_view,
-        //                 resolve_target: None,
-        //                 ops: wgpu::Operations {
-        //                     load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-        //                     store: true,
-        //                 },
-        //             })],
-        //             depth_stencil_attachment: None,
-        //         });
-
-        //         rpass.execute_bundles(filters);
-        //     }
-        // }
-
-        // // render UI pass
-        // if let Some((clipped_primitives, textures_delta)) = self.ui {
-        //     let span = debug_span!("Render UI");
-        //     let _e = span.enter();
-        //     let mut renderer = egui_render().write().unwrap();
-        //     // update textures
-        //     for (id, image) in textures_delta.set {
-        //         renderer.update_texture(device(), queue(), id, &image);
-        //     }
-
-        //     let screen_descriptor = {
-        //         let config = surface_config().read().unwrap();
-        //         egui_wgpu::renderer::ScreenDescriptor {
-        //             size_in_pixels: [config.width, config.height],
-        //             pixels_per_point: 1.0,
-        //         }
-        //     };
-
-        //     let _ = renderer.update_buffers(
-        //         device(),
-        //         queue(),
-        //         &mut self.encoder,
-        //         &clipped_primitives,
-        //         &screen_descriptor,
-        //     );
-
-        //     {
-        //         let mut rpass = self.encoder.begin_render_pass(&RenderPassDescriptor {
-        //             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-        //                 view: &self.frame_view,
-        //                 resolve_target: None,
-        //                 ops: wgpu::Operations {
-        //                     load: wgpu::LoadOp::Load,
-        //                     store: true,
-        //                 },
-        //             })],
-        //             depth_stencil_attachment: None,
-        //             label: Some("egui_render"),
-        //         });
-
-        //         renderer.render(&mut rpass, &clipped_primitives, &screen_descriptor);
-        //     }
-
-        //     for id in textures_delta.free {
-        //         renderer.free_texture(&id);
-        //     }
-        // }
-
-        // let span = debug_span!("GPU time");
-        // let _e = span.enter();
-
+    pub fn present(self) {
         let _ = queue().submit(Some(self.encoder.finish()));
         debug!("Presenting Frame");
         self.frame.present();
@@ -185,6 +62,11 @@ impl<'a> Frame<'a> {
     /// Create a render pass inside this frame
     pub fn render_pass(&'a mut self, desc: RenderPassDescriptor<'a, 'a>) -> RenderPass<'a> {
         self.encoder.begin_render_pass(&desc)
+    }
+
+    /// Start a custom renderpass
+    pub fn render<T: super::render_job::RenderPass>(&'a mut self) -> T {
+        T::begin(self)
     }
 
     /// Try to fetch a new frame
@@ -201,26 +83,8 @@ impl<'a> Frame<'a> {
             frame,
             frame_view,
             encoder,
-            geom: vec![],
-            lights: vec![],
-            filters: vec![],
             ui: None,
         })
-    }
-
-    /// Draw a geometry object to the internal g-buffer
-    pub fn draw_geom(&mut self, geom: &'a dyn Drawable) {
-        self.geom.push(geom.bundle());
-    }
-
-    /// Add a light to this frame
-    pub fn draw_light(&mut self, light: &'a dyn Drawable) {
-        self.lights.push(light.bundle());
-    }
-
-    /// Add a post-processing filter to this frame
-    pub fn draw_filter(&mut self, filter: &'a dyn Drawable) {
-        self.filters.push(filter.bundle());
     }
 
     /// Draw an EGUI ui to this frame

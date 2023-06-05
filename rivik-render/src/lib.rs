@@ -20,6 +20,7 @@ pub mod tracing;
 pub mod transform;
 pub use transform::Transform;
 pub mod render_job;
+pub mod sampler;
 
 /// Contains asset loader functions for fetching GPU assets from disk formats
 pub mod load {
@@ -39,13 +40,18 @@ pub mod draw {
     pub use mesh::Mesh;
     pub use pixel_mesh::PixelMesh;
     pub use skymesh::SkyMesh;
-}
 
-/// Containts render bundle creation methods for screen filters
-pub mod filters {
-    mod display;
+    /// Renderable object that can be packaged up into a render bundle
+    pub trait Bundle {
+        #[allow(missing_docs)]
+        fn bundle(&self) -> wgpu::RenderBundle;
+    }
 
-    pub use display::DisplayFilter;
+    /// Something that can be rendered
+    pub trait Render {
+        #[allow(missing_docs)]
+        fn render(&self, rpass: &mut wgpu::RenderPass);
+    }
 }
 
 /// Contains render bundle creation methods for lights
@@ -60,6 +66,11 @@ pub mod lights {
 /// Programmable render pipeline
 pub mod jobs {
     pub mod deferred;
+    pub mod frustum_cull;
+}
+
+pub mod pass {
+    pub mod geom;
 }
 
 /// Types related to the render pipeline

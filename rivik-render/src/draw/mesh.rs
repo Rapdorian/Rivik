@@ -4,54 +4,85 @@
  * obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-//! Utilities for rendering a static mesh
-use std::{borrow::Borrow, rc::Rc, sync::Arc};
+//! A mesh type for drawing a single static mesh
+//! TODO: This should be expanded to models with multiple meshes
+
+use std::{rc::Rc, sync::Arc};
 
 use assets::formats::{self, mesh::Vert};
+use glam::Vec3A;
 use wgpu::{
-    RenderBundle, RenderBundleDescriptor, RenderBundleEncoderDescriptor, Texture, TextureView,
+    BindGroup, BindGroupDescriptor, BindGroupEntry, RenderBundle, RenderBundleDescriptor,
+    RenderBundleEncoderDescriptor, Texture, TextureView,
 };
 
 use crate::{
     context::device,
+    jobs::frustum_cull::AABB,
     load::CountedBuffer,
     pipeline::{
         mesh::{self, MeshVertex},
         simple, GBuffer,
     },
-    transform::{self, Spatial},
+    sampler,
+    transform::Spatial,
     Transform,
 };
 
-/// Basic mesh renderable
+use super::Bundle;
+/// Draw a mesh
 pub struct Mesh {
-    bundle: RenderBundle,
-    transform: Transform,
-
-    //keep the following assets alive
-    mesh: Rc<Arc<CountedBuffer>>,
-    tex: Rc<Arc<(Texture, TextureView)>>,
-}
-
-impl Borrow<RenderBundle> for Mesh {
-    fn borrow(&self) -> &RenderBundle {
-        &self.bundle
-    }
+    pub(super) transform: Transform,
+    pub(super) mesh: Rc<Arc<CountedBuffer>>,
+    pub(super) tex: Rc<Arc<(Texture, TextureView)>>,
+    pub(super) tex_grp: BindGroup,
+    pub(super) transform_binding: BindGroup,
 }
 
 impl Spatial for Mesh {
     fn transform(&self) -> &Transform {
         &self.transform
     }
+
+    fn bound(&self) -> AABB {
+        self.mesh.bounds()
+    }
 }
 
-/// TODO: I need to change this so it doesn't use the same barycentric coord stuf that PixelMesh
-/// needs.
 impl Mesh {
-    /// Create a new mesh renderable
+    /// Create a drawable
     pub fn new(mesh: Rc<Arc<CountedBuffer>>, tex: Rc<Arc<(Texture, TextureView)>>) -> Self {
-        let device = device();
-        let mut bundle = device.create_render_bundle_encoder(&RenderBundleEncoderDescriptor {
+        let transform = Transform::default();
+
+        let texture_group = device().create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &*simple::TEX_LAYOUT,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Sampler(&sampler::PIXEL),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&tex.1),
+                },
+            ],
+        });
+
+        Self {
+            mesh,
+            tex,
+            tex_grp: texture_group,
+            transform_binding: transform.binding(),
+            transform,
+        }
+    }
+}
+
+impl Bundle for Mesh {
+    /// Bundle the draw commands for this object
+    fn bundle(&self) -> RenderBundle {
+        let mut bundle = device().create_render_bundle_encoder(&RenderBundleEncoderDescriptor {
             label: None,
             color_formats: GBuffer::color_formats(),
             depth_stencil: GBuffer::depth_format(),
@@ -59,57 +90,42 @@ impl Mesh {
             multiview: None,
         });
 
-        let transform = Transform::default();
-        let transform_binding = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: transform::layout(),
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: transform.buffer().as_entire_binding(),
-            }],
-            label: None,
-        });
-
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::Repeat,
-            address_mode_v: wgpu::AddressMode::Repeat,
-            ..Default::default()
-        });
-        let texture_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &*simple::TEX_LAYOUT,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&tex.1),
-                },
-            ],
-        });
-
-        // start recording render commands
         bundle.set_pipeline(&*mesh::PIPELINE);
-        bundle.set_bind_group(0, &texture_group, &[]);
-        bundle.set_bind_group(1, &transform_binding, &[]);
-        bundle.set_vertex_buffer(0, mesh.slice(..));
-        bundle.draw(0..mesh.len(), 0..1);
-        let bundle = bundle.finish(&RenderBundleDescriptor { label: None });
-        Self {
-            bundle,
-            transform,
-            mesh,
-            tex,
-        }
+        bundle.set_bind_group(0, &self.tex_grp, &[]);
+        bundle.set_bind_group(1, &self.transform_binding, &[]);
+        bundle.set_vertex_buffer(0, self.mesh.slice(..));
+        bundle.draw(0..self.mesh.len(), 0..1);
+
+        bundle.finish(&RenderBundleDescriptor { label: None })
     }
 }
 
 /// Generate a vertex buffer for a given mesh
-pub fn vertex_buffer(mesh: &formats::mesh::Mesh<f32>) -> (Vec<u8>, usize) {
+pub fn vertex_buffer(mesh: &formats::mesh::Mesh<f32>) -> (Vec<u8>, usize, AABB) {
     let mut verts: Vec<MeshVertex> = vec![];
+
+    let mut min = Vec3A::new(f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY);
+    let mut max = Vec3A::new(f32::INFINITY, f32::INFINITY, f32::INFINITY);
+
     for (a, b, c) in mesh.faces() {
-        let gen_vert = |v: Vert| {
+        let mut gen_vert = |v: Vert| {
+            // find the bounding box of these verts
+            if v.pos.x < min.x {
+                min.x = v.pos.x;
+            } else if v.pos.x > max.x {
+                max.x = v.pos.x;
+            }
+            if v.pos.y < min.y {
+                min.y = v.pos.y;
+            } else if v.pos.y > max.y {
+                max.y = v.pos.y;
+            }
+            if v.pos.z < min.z {
+                min.z = v.pos.z;
+            } else if v.pos.z > max.z {
+                max.z = v.pos.z;
+            }
+
             let norm = v.norm.unwrap_or(mint::Point3 {
                 x: 0.0,
                 y: 0.0,
@@ -127,10 +143,14 @@ pub fn vertex_buffer(mesh: &formats::mesh::Mesh<f32>) -> (Vec<u8>, usize) {
         verts.push(gen_vert(c));
     }
 
+    let mut aabb = AABB::default();
+    aabb.min(min);
+    aabb.max(max);
+
     // create buffer out of vertex list
     let mut buffer = vec![];
     for v in &verts {
         buffer.extend_from_slice(bytemuck::bytes_of(v));
     }
-    (buffer, verts.len())
+    (buffer, verts.len(), aabb)
 }

@@ -1,0 +1,16 @@
+#ambient = 0.2
+#ambient = [0.2, 0.0, 0.0]
+
+[[node]]
+path = "lump:path/to/lump#ground"
+pos = [1, 2, 3]
+
+[[node.node]]
+path = "lump:/path/to/lump#trees"
+
+[[node]]
+power = 4.5
+dir = [-1, 0, 1]
+
+[[node]]
+include = "file:character.scn"
