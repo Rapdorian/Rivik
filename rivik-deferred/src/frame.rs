@@ -121,15 +121,15 @@ impl<'a> Drop for Frame<'a> {
             match light {
                 // Ambient lights are'nt being draw with this buffer but have to be present to keep
                 // the index in sync
-                Light::Ambient { color } => buffer.extend_from_slice(&[0.0; 6]),
+                Light::Ambient { color } => buffer.extend_from_slice(&[0.0; 8]),
                 Light::Directional { color, direction } => {
+                    let plen = buffer.len();
                     buffer.extend_from_slice(color);
                     buffer.push(0.0);
                     // direction needs to be moved into view space
                     let dir =
                         self.camera * Vec4::new(direction[0], direction[1], direction[2], 0.0);
                     buffer.extend_from_slice(&dir.to_array());
-                    buffer.push(0.0);
                 }
                 Light::Point { color, position } => {
                     buffer.extend_from_slice(color);
@@ -185,12 +185,12 @@ impl<'a> Drop for Frame<'a> {
             });
 
             // draw meshes
-            rpass.set_pipeline(&*MESH_PIPE);
-            rpass.set_bind_group(0, &*sampler::BIND, &[]);
 
             for (i, (mesh, _)) in self.meshes.iter().enumerate() {
+                rpass.set_pipeline(&*MESH_PIPE);
                 // issue draw commands for a mesh
-                rpass.set_bind_group(1, &ubo, &[(mem::size_of::<Mat4>() * i) as u32]);
+                rpass.set_bind_group(0, &*sampler::BIND, &[]);
+                rpass.set_bind_group(1, &ubo, &[(UBO_SIZE * i) as u32]);
                 rpass.set_bind_group(2, &materials[i], &[]);
                 rpass.set_vertex_buffer(0, self.vertex_buffers[mesh.mesh as usize].slice(..));
                 let (idx_buffer, idx_len) = &self.index_buffers[mesh.mesh as usize];
@@ -238,17 +238,17 @@ impl<'a> Drop for Frame<'a> {
                 depth_stencil_attachment: None,
             });
 
-            let ambient: f32 = 0.1;
+            let ambient: f32 = 0.0;
 
             // ambient
-            rpass.set_pipeline(&*ambient::PIPE);
-            rpass.set_bind_group(0, &*sampler::BIND, &[]);
-            rpass.set_bind_group(1, &*gbuffer::BIND, &[]);
-            rpass.set_push_constants(
-                wgpu::ShaderStages::FRAGMENT,
-                0,
-                bytemuck::bytes_of(&[ambient; 4]),
-            );
+            // rpass.set_pipeline(&*ambient::PIPE);
+            // rpass.set_bind_group(0, &*sampler::BIND, &[]);
+            // rpass.set_bind_group(1, &*gbuffer::BIND, &[]);
+            // rpass.set_push_constants(
+            //     wgpu::ShaderStages::FRAGMENT,
+            //     0,
+            //     bytemuck::bytes_of(&[ambient; 4]),
+            // );
             //rpass.draw(0..7, 0..1);
 
             // draw lights
@@ -257,7 +257,7 @@ impl<'a> Drop for Frame<'a> {
                 rpass.set_bind_group(0, &*sampler::BIND, &[]);
                 rpass.set_bind_group(1, &*gbuffer::BIND, &[]);
                 rpass.set_bind_group(2, &light_list, &[]);
-                rpass.draw(0..7, 0..1);
+                rpass.draw(0..7, 0..self.lights.len() as u32);
             }
         }
 

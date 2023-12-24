@@ -6,8 +6,8 @@ struct VertexOutput{
 }
 
 struct LightData {
-    color: vec3<f32>,
-    dir: vec3<f32>,
+    color: vec4<f32>,
+    dir: vec4<f32>,
 }
 
 struct LightBuffer {
@@ -28,8 +28,8 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32, @builtin(instance_index)
 
     out.pos = vec4<f32>(x, y, 0.0, 1.0);
     out.uv = vec2<f32>((x+1.0)/2.0, 1.0-(y+1.0)/2.0);
-    out.light_color = light.lights[light_idx].color;
-    out.light_dir = light.lights[light_idx].dir;
+    out.light_color = light.lights[light_idx].color.xyz;
+    out.light_dir = light.lights[light_idx].dir.xyz;
     return out;
 }
 

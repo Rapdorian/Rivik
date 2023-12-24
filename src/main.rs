@@ -1,188 +1,110 @@
 //! Basic version of the engine for testing
 
-use std::{fs, time::Duration};
-
-use glam::{EulerRot, Mat4, Quat, Vec3};
-use include_bytes_aligned::include_bytes_aligned;
-use legion::{
-    component,
-    serialize::Canon,
-    system,
-    systems::CommandBuffer,
-    world::{Entry, SubWorld},
-    Entity, EntityStore, Query, Registry, Resources, Schedule, World,
+use glam::{EulerRot, Quat, Vec3, Vec3A};
+use legion::{system, systems, world::SubWorld, Entity, IntoQuery, Query, Resources, World};
+use rivik::{
+    collision::{
+        shapes::{BoundingBox, BoundingSphere},
+        BoundingShape, Collider, RigidTransform,
+    },
+    input::{keys::KeyCode, Button::Key, Input},
+    load::load_model_system,
+    physics::{self, Kinematic, RigidBody},
+    render::{render_system, Transform},
+    scene::Scene,
+    DeltaTime,
 };
-use rivik_deferred::{
-    types::{light::Light, mesh::MeshPtr, tex::DynTex, Frame, Model, Renderer},
-    Render,
-};
-use serde::{Deserialize, Serialize};
-use winit::{
-    event::{ElementState, Event, VirtualKeyCode, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
-};
+use rivik_deferred::types::Model;
 
 // plan:
 // For now we'll just implement a simple game with legion and see where it takes us design wise
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Transform {
-    position: Vec3,
-    rotation: Quat,
-    scale: Vec3,
-}
+// I still have no idea how we should hande UI.
+// Maybe we'll do something with a global resource
+
+struct Rotate;
 
 #[system(for_each)]
-fn load_model(
-    entity: &Entity,
-    cmd: &mut CommandBuffer,
-    model: &mut Model<String>,
-    loaded: Option<&Model<u32>>,
-    #[resource] render: &mut Render,
+fn rotate(
+    kinematic: &mut Kinematic,
+    _r: &Rotate,
+    #[resource] dt: &DeltaTime,
+    #[resource] input: &Input,
 ) {
-    if loaded.is_some() {
-        // don't load this model
-        return;
+    let dt = **dt;
+    if input.button(KeyCode::D).is_down() {
+        //transform.rotation *= Quat::from_euler(EulerRot::XYZ, 1. * dt, 2. * dt, 3. * dt);
+        kinematic.velocity.x += 1.0 * dt;
     }
-    // create a new model
-    let loaded = Model {
-        mesh: render.upload_mesh(None, &MeshPtr::new(&fs::read(&model.mesh).unwrap())),
-        diffuse: load_tga(render, &fs::read(&model.diffuse).unwrap()),
-        metal: load_tga(render, &fs::read(&model.metal).unwrap()),
-        rough: load_tga(render, &fs::read(&model.rough).unwrap()),
-        normal: load_tga(render, &fs::read(&model.normal).unwrap()),
-    };
-
-    cmd.add_component(*entity, loaded);
-    //cmd.remove_component::<Model<String>>(*entity);
-}
-
-#[system]
-fn render_sys(
-    #[resource] render: &mut Render,
-    world: &mut SubWorld,
-    query: &mut Query<(&Transform, &Model<u32>)>,
-) {
-    // create a frame and queue everything
-    // This may not be the best way to do this.
-    // Creating a frame resource that is updated per frame may be better
-    let mut frame = render.frame();
-    frame.draw_light(Light::Directional {
-        color: [1.0; 3],
-        direction: [-1., 0., 1.],
-    });
-
-    let cam = Mat4::look_at_rh(Vec3::new(-2.0, -2.0, 2.0), Vec3::ZERO, Vec3::Z);
-    frame.set_camera(cam);
-    for (transform, model) in query.iter(world) {
-        // only render loaded models
-        frame.draw_mesh(
-            model,
-            transform.position,
-            transform.rotation,
-            transform.scale,
-        );
+    if input.button(KeyCode::A).is_down() {
+        //transform.rotation *= Quat::from_euler(EulerRot::XYZ, 1. * dt, 2. * dt, 3. * dt);
+        kinematic.velocity.x -= 1.0 * dt;
     }
 }
 
-#[system(for_each)]
-fn rotate(transform: &mut Transform) {
-    transform.rotation *= Quat::from_euler(EulerRot::XYZ, 0.02, 0.05, 0.03);
-}
+struct Demo;
 
-fn load_tga(rend: &mut Render, tex: &[u8]) -> u32 {
-    let img = image::load_from_memory_with_format(tex, image::ImageFormat::Tga).unwrap();
+impl Scene for Demo {
+    fn update(&mut self, sched: &mut systems::Builder) {
+        sched
+            .add_system(load_model_system::<String>())
+            .add_system(load_model_system::<&'static str>())
+            .add_system(rotate_system())
+            .add_system(physics::collision_system())
+            .add_system(physics::kinematic_system());
+    }
 
-    let tex = DynTex {
-        width: img.width() as u16,
-        height: img.height() as u16,
-        data: img.to_rgba8().to_vec(),
-    };
-    rend.upload_texture(None, &tex)
+    fn draw(&mut self, sched: &mut systems::Builder) {
+        sched.add_system(render_system());
+    }
+
+    fn init(&mut self, world: &mut World, _resources: &mut Resources) {
+        // add sphere to world
+        world.push((
+            Transform {
+                position: Vec3A::ZERO,
+                rotation: Quat::default(),
+                scale: Vec3A::ONE,
+            },
+            Model {
+                mesh: "rivik-deferred/examples/sphere.mesh",
+                diffuse: "rivik-deferred/examples/diffuse.tga",
+                rough: "rivik-deferred/examples/specular.tga",
+                metal: "rivik-deferred/examples/specular.tga",
+                normal: "rivik-deferred/examples/normal.tga",
+            },
+            BoundingShape::Sphere(BoundingSphere { radius: 1.0 }),
+            RigidBody::Static,
+        ));
+
+        // add a second object for collision purposes
+        world.push((
+            Transform {
+                position: Vec3A::new(-2.5, 0.0, 0.0),
+                rotation: Quat::default(),
+                scale: Vec3A::ONE,
+            },
+            Model {
+                mesh: "rivik-deferred/examples/cube.mesh",
+                diffuse: "rivik-deferred/examples/diffuse.tga",
+                rough: "rivik-deferred/examples/specular.tga",
+                metal: "rivik-deferred/examples/specular.tga",
+                normal: "rivik-deferred/examples/normal.tga",
+            },
+            BoundingShape::Box(BoundingBox {
+                min: Vec3A::new(-1., -1., -1.),
+                max: Vec3A::ONE,
+            }),
+            Rotate,
+            RigidBody::Dynamic { mass: 1.0 },
+            Kinematic {
+                velocity: Vec3A::ZERO,
+            },
+        ));
+    }
 }
 
 fn main() {
-    // setup winit
-    let event_loop = EventLoop::new();
-    let window = WindowBuilder::new()
-        .with_title("Rivik Engine")
-        .with_resizable(false)
-        .build(&event_loop)
-        .unwrap();
-
-    // init game
-    let mut world = World::default();
-    let mut res = Resources::default();
-
-    // setup game resources
-    res.insert(Render::new(&window));
-    world.extend([(
-        Transform {
-            position: Vec3::ZERO,
-            rotation: Quat::default(),
-            scale: Vec3::ONE,
-        },
-        Model {
-            mesh: String::from("rivik-deferred/examples/sphere.mesh"),
-            diffuse: String::from("rivik-deferred/examples/diffuse.tga"),
-            rough: String::from("rivik-deferred/examples/specular.tga"),
-            metal: String::from("rivik-deferred/examples/specular.tga"),
-            normal: String::from("rivik-deferred/examples/normal.tga"),
-        },
-    )]);
-
-    let mut registry = Registry::<String>::default();
-    registry.register::<Transform>("transform".to_string());
-    registry.register::<Model<String>>("model".to_string());
-    registry.on_unknown(legion::serialize::UnknownType::Ignore);
-
-    let entity_serializer = Canon::default();
-
-    // start event pump
-    event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Wait;
-
-        match event {
-            Event::WindowEvent { window_id, event } if window_id == window.id() => match event {
-                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                WindowEvent::KeyboardInput {
-                    device_id,
-                    input,
-                    is_synthetic,
-                } => {
-                    if Some(VirtualKeyCode::Tab) == input.virtual_keycode
-                        && input.state == ElementState::Pressed
-                    {
-                        // print serialized world
-                        let ser = toml::to_string_pretty(&world.as_serializable(
-                            component::<Transform>(),
-                            &registry,
-                            &entity_serializer,
-                        ))
-                        .unwrap();
-                        println!("{ser}");
-                    }
-                }
-                _ => {}
-            },
-            Event::MainEventsCleared => {
-                let mut update = Schedule::builder().add_system(rotate_system()).build();
-                update.execute(&mut world, &mut res);
-            }
-            Event::RedrawRequested(window_id) if window_id == window.id() => {
-                // create draw schedule
-                let mut draw_sched = Schedule::builder()
-                    .add_system(load_model_system())
-                    .add_system(render_sys_system())
-                    .build();
-                draw_sched.execute(&mut world, &mut res);
-
-                // shitty framerate control
-                std::thread::sleep(Duration::from_millis(16));
-                window.request_redraw();
-            }
-            _ => {}
-        }
-    });
+    // build the scene
+    rivik::start(Demo);
 }

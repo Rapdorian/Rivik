@@ -1,0 +1,3 @@
+struct Cmd {
+    name: String,
+}
